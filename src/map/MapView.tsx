@@ -15,6 +15,7 @@ import { BUILDING_ICON_COLOR, EVENT_COLOR, ICON_NAMES, iconSdf } from './icons';
 import { buildShips, buildFlights, buildRoadLanes, buildRailLanes, animateVehicles, positionAlong, greatCircle, type Ship, type Flight, type Lane } from './traffic';
 import { formationDomain, formationUnits, blockaded } from '../sim/military';
 import { areEnemies } from '../sim/diplomacy';
+import { formationVisible } from '../sim/visibility';
 import { BUILDING_BY_ID } from '../sim/content/buildings';
 import { UNIT_BY_ID } from '../sim/content/units';
 import { Rng } from '../sim/rng';
@@ -347,8 +348,10 @@ class MapController {
     const sel = useStore.getState().selectedFormation;
     const feats: Feature[] = [];
     const paths: FormationPath[] = [];
+    const spectator = !me;
     for (const f of Object.values(state.formations)) {
       if (f.parent) continue;
+      if (!spectator && !formationVisible(state, this.world, me, f)) continue;
       const units = formationUnits(state, f);
       if (!units.length) continue;
       const domain = formationDomain(state, f);
@@ -554,6 +557,7 @@ class MapController {
     if (!state || useStore.getState().screen === 'menu') return;
     const unitId = this.unitAt(point);
     const f: Formation | undefined = unitId ? state.formations[unitId] : undefined;
+    if (f && !formationVisible(state, this.world, this.myCountry, f)) return;
     if (f) {
       const units = formationUnits(state, f);
       const types = new Map<string, number>();

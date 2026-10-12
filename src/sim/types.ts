@@ -267,6 +267,7 @@ export interface ChatMessage { id: string; tick: number; from: string; name: str
 
 export interface GameSettings {
   scenario: 'realworld' | 'peaceful';
+  fogOfWar: boolean;
   startYear: number;
   electionsCanRemovePlayers: boolean;
   aiAggression: number; // 0..2

@@ -25,3 +25,17 @@ describe('scenarios', () => {
     expect(Object.keys(s.wars).length).toBe(0);
   });
 });
+
+import { formationVisible, visibleRegions } from '../visibility';
+describe('fog of war', () => {
+  it('hides distant enemy formations but shows nearby ones', () => {
+    const s = createInitialState(world, { ...DEFAULT_SETTINGS, scenario: 'realworld' }, 5);
+    const vis = visibleRegions(s, world, 'UKR');
+    const ukrFront = Object.values(s.formations).filter((f) => f.owner === 'RUS' && !f.parent && formationVisible(s, world, 'UKR', f));
+    const vladivostok = world.regions.find((r) => r.n === 'Primor\'ye')!;
+    expect(vis.has(vladivostok.id)).toBe(false);
+    expect(ukrFront.length).toBeGreaterThan(0);
+    const hidden = Object.values(s.formations).filter((f) => f.owner === 'CHN' && !f.parent && !formationVisible(s, world, 'UKR', f));
+    expect(hidden.length).toBeGreaterThan(0);
+  });
+});

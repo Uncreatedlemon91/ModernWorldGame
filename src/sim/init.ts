@@ -15,6 +15,7 @@ import { applyScenario } from './content/scenarios';
 
 export const DEFAULT_SETTINGS: GameSettings = {
   scenario: 'realworld',
+  fogOfWar: true,
   startYear: 2026,
   electionsCanRemovePlayers: true,
   aiAggression: 1,

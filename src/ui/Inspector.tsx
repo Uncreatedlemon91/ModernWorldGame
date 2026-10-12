@@ -11,6 +11,7 @@ import { iconDataUrl, BUILDING_ICON_COLOR } from '../map/icons';
 import { rgbCss } from '../map/colors';
 import { ForeignCountry } from './panels/Diplomacy';
 import type { Order } from '../sim/types';
+import { formationVisible } from '../sim/visibility';
 
 export function Inspector() {
   const selectedFormation = useStore((s) => s.selectedFormation);
@@ -30,7 +31,7 @@ function FormationInspector({ id }: { id: string }) {
   const orderMode = useStore((s) => s.orderMode);
   if (!state || !world || !me) return null;
   const f = state.formations[id];
-  if (!f) return null;
+  if (!f || !formationVisible(state, world, me.country, f)) return null;
   const owner = state.countries[f.owner];
   const mine = me.country === f.owner && owner && playerGoverns(state, owner, me.id);
   const domain = formationDomain(state, f);

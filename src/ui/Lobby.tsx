@@ -94,6 +94,11 @@ export function Lobby() {
               <option value="yes">Puts you in opposition</option>
               <option value="no">You stay in power</option>
             </select>
+            <label>Fog of war</label>
+            <select disabled={!me.isHost} value={state.settings.fogOfWar === false ? 'off' : 'on'} onChange={(e) => send({ type: 'lobbySettings', settings: { fogOfWar: e.target.value === 'on' } })}>
+              <option value="on">On — see only what your forces see</option>
+              <option value="off">Off — all forces visible</option>
+            </select>
             <label>AI aggression</label>
             <select disabled={!me.isHost} value={state.settings.aiAggression} onChange={(e) => send({ type: 'lobbySettings', settings: { aiAggression: Number(e.target.value) } })}>
               <option value={0.3}>Peaceful</option><option value={1}>Normal</option><option value={1.8}>Warlike</option>
