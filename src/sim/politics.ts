@@ -117,7 +117,7 @@ export function regionVote(state: GameState, world: StaticWorld, c: Country, reg
       let s = -ideologyDistance(g.ideology, p.ideology) * 2.6;
       const inGov = c.coalition.includes(p.id);
       if (inGov) s += (approval - 50) / 22; else s -= (approval - 50) / 45;
-      s += p.momentum + (r.supportByParty?.[p.id] ?? 0);
+      s += p.momentum + (r.supportByParty?.[p.id] ?? 0) + (p.bias ?? 0);
       if (p.id === c.rulingParty) s += 0.25; // incumbency
       return s;
     });
@@ -129,6 +129,21 @@ export function regionVote(state: GameState, world: StaticWorld, c: Country, reg
   const tot = Object.values(votes).reduce((a, b) => a + b, 0) || 1;
   for (const k of Object.keys(votes)) votes[k] /= tot;
   return votes;
+}
+
+/** Calibrate party biases so opening polls match each party's real-world support. */
+export function calibrateParties(state: GameState, world: StaticWorld, c: Country) {
+  const parties = partiesOf(state, c);
+  if (parties.length <= 1) return;
+  for (let iter = 0; iter < 6; iter++) {
+    const v = nationalVote(state, world, c);
+    for (const p of parties) {
+      const target = (p.base ?? p.popularity) + 0.005;
+      p.bias = (p.bias ?? 0) + Math.log(target / ((v[p.id] ?? 0) + 0.005)) * 0.6;
+    }
+  }
+  const v = nationalVote(state, world, c);
+  for (const p of parties) p.popularity = v[p.id] ?? p.popularity;
 }
 
 export function nationalVote(state: GameState, world: StaticWorld, c: Country): Record<string, number> {

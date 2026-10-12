@@ -9,7 +9,7 @@ import { UNIT_BY_ID } from './content/units';
 import { BUILDING_BY_ID } from './content/buildings';
 import { Rng, hashString } from './rng';
 import { clamp, hexToRgb, newId } from './util';
-import { isDemocracy, defaultElectionInterval, groupTargets, politicsMonthly } from './politics';
+import { isDemocracy, defaultElectionInterval, groupTargets, politicsMonthly, calibrateParties } from './politics';
 import { recomputeCountryEconomy, regionGdp } from './economy';
 import { applyScenario } from './content/scenarios';
 import { seedCabinet } from './cabinet';
@@ -210,21 +210,24 @@ export function createInitialState(world: StaticWorld, settings: GameSettings = 
       partyIds.push(id);
       const party: Party = {
         id, country: sc.a3, name: ps.name, short: ps.short, color: hexToRgb(ps.color), ideology: { ...ps.ideology },
-        popularity: ps.share, funds: Math.max(5, gdp * 0.02 * ps.share), playerId: null, momentum: 0, billStance: {},
+        popularity: ps.share, base: ps.share, funds: Math.max(5, gdp * 0.02 * ps.share), playerId: null, momentum: 0, billStance: {},
       };
       state.parties[id] = party;
     }
     const legislatureSize = !isDemocracy(gov) ? 100 : clamp(Math.round(Math.sqrt(pop / 1000) * 2.2), 60, 600);
-    const seats: Record<string, number> = {};
-    let assigned = 0;
-    partyIds.forEach((pid, i) => {
-      const n = i === partyIds.length - 1 ? legislatureSize - assigned : Math.round(partySeeds[i].share * legislatureSize);
-      seats[pid] = Math.max(0, n);
-      assigned += seats[pid];
-    });
     const coalition = [partyIds[0], ...(major?.coalition ?? []).map((i) => partyIds[i]).filter(Boolean)];
 
     const laws = { ...defaultLaws(gov, sc.income), ...(major?.laws ?? {}) };
+    // Seats: proportional systems mirror vote shares; first-past-the-post exaggerates the leader (cube law).
+    const weights = partySeeds.map((p) => (laws.electoral_system === 'fptp' && partySeeds.length > 1 ? p.share ** 3 : p.share));
+    const wsum = weights.reduce((a, b) => a + b, 0) || 1;
+    const seats: Record<string, number> = {};
+    let assigned = 0;
+    partyIds.forEach((pid, i) => {
+      const n = i === partyIds.length - 1 ? legislatureSize - assigned : Math.round((weights[i] / wsum) * legislatureSize);
+      seats[pid] = Math.max(0, n);
+      assigned += seats[pid];
+    });
     const taxes: Record<TaxKey, number> = rich
       ? { income: 30, corporate: 22, sales: 16, tariffs: 3 }
       : poor ? { income: 12, corporate: 20, sales: 12, tariffs: 10 } : { income: 20, corporate: 22, sales: 15, tariffs: 6 };
@@ -296,6 +299,7 @@ export function createInitialState(world: StaticWorld, settings: GameSettings = 
     const targets = groupTargets(state, c);
     for (const g of Object.keys(c.groups) as GroupId[]) c.groups[g].approval = targets[g];
     for (let i = 0; i < 6; i++) politicsMonthly(state, world, c);
+    calibrateParties(state, world, c);
     recomputeCountryEconomy(state, world, c, true);
   }
   return state;

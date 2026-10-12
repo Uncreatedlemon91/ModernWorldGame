@@ -128,6 +128,8 @@ export interface Party {
   color: [number, number, number];
   ideology: Ideology;
   popularity: number; // national vote intention 0..1
+  base?: number; // real-world support at game start
+  bias?: number; // calibration so opening polls match `base`
   funds: number; // millions
   playerId: string | null;
   momentum: number; // temporary campaign boost

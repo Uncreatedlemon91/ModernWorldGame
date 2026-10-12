@@ -5,5 +5,6 @@ export default defineConfig({
   plugins: [react()],
   base: './',
   build: { chunkSizeWarningLimit: 4000 },
+  worker: { format: 'es' },
   test: { environment: 'node', testTimeout: 180000 },
 } as never);

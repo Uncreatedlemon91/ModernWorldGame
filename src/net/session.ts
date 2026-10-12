@@ -4,24 +4,14 @@
 import Peer, { type DataConnection, type PeerOptions } from 'peerjs';
 import type { StaticWorld } from '../data/static';
 import type { GameSettings, GameState } from '../sim/types';
-import { createInitialState, DEFAULT_SETTINGS } from '../sim/init';
-import { advanceDay } from '../sim/tick';
-import { applyCommand, assignPlayerCountry, type Command, type CommandResult } from '../sim/commands';
-import { StateDiffer, applyPatch, gzip, gunzip, isEmptyPatch, type Patch } from './sync';
-import { addNews } from '../sim/news';
-import { recomputeCountryEconomy } from '../sim/economy';
-import { ensureCandidates } from '../sim/cabinet';
+import type { CommandResult } from '../sim/commands';
+import { applyPatch, gzip, gunzip, type Patch } from './sync';
+import type { AnyCommand } from './authority';
+import type { WorkerIn, WorkerOut } from './simWorker';
 
-export type LobbyCommand =
-  | { type: 'lobbyPick'; country: string | null }
-  | { type: 'lobbyName'; name: string }
-  | { type: 'lobbyReady'; ready: boolean }
-  | { type: 'lobbySettings'; settings: Partial<GameSettings> }
-  | { type: 'start' };
-export type AnyCommand = Command | LobbyCommand;
+export { SPEED_MS, type AnyCommand, type LobbyCommand } from './authority';
 
-/** Milliseconds of real time per simulated day for each speed setting. */
-export const SPEED_MS = [0, 2000, 1000, 500, 220, 110];
+type WithoutId<T> = T extends unknown ? Omit<T, 'id'> : never;
 
 type Msg =
   | { type: 'hello'; name: string; playerId?: string }
@@ -70,35 +60,57 @@ export abstract class Session {
   protected notify() { this.version++; for (const l of this.listeners) l(); }
 }
 
-/** Authoritative session: single-player, or the host of a multiplayer game. */
+/** Authoritative session: single-player, or the host of a multiplayer game.
+ *  The simulation runs in a Web Worker; this class keeps a replica of the state
+ *  for the UI and relays commands and diffs between the worker and peers. */
 export class HostSession extends Session {
   readonly isHost = true;
   roomCode: string | null = null;
   private peer: Peer | null = null;
   private conns = new Map<string, DataConnection>(); // playerId -> conn
-  private differ = new StateDiffer();
-  private loop: number | undefined;
-  private broadcastTimer: number | undefined;
-  private acc = 0;
-  private last = performance.now();
-  onTick?: () => void;
+  private worker: Worker;
+  private seq = 1;
+  private pending = new Map<number, (r: unknown) => void>();
+  private multiplayer: boolean;
 
   constructor(world: StaticWorld, opts: { name: string; multiplayer: boolean; state?: GameState; settings?: GameSettings }) {
     super(world);
     this.me = 'host';
-    if (opts.state) {
-      this.state = opts.state;
-      // the loading player becomes host; mark everyone else disconnected
-      for (const p of Object.values(this.state.players)) { p.connected = p.id === 'host'; }
-      if (!this.state.players.host) this.state.players.host = { id: 'host', name: opts.name, country: null, partyId: null, connected: true, isHost: true, ready: true };
-      this.state.paused = true;
-    } else {
-      this.state = createInitialState(world, opts.settings ?? { ...DEFAULT_SETTINGS }, Math.floor(Math.random() * 1e9));
-      this.state.players.host = { id: 'host', name: opts.name, country: null, partyId: null, connected: true, isHost: true, ready: false };
+    this.multiplayer = opts.multiplayer;
+    this.statusText = 'Building the world…';
+    this.worker = new Worker(new URL('./simWorker.ts', import.meta.url), { type: 'module' });
+    this.worker.onmessage = (ev: MessageEvent<WorkerOut>) => this.onWorker(ev.data);
+    this.worker.onerror = (e) => { this.status = 'error'; this.statusText = `Simulation failed to start: ${e.message}`; this.notify(); };
+    const init: WorkerIn = { type: 'init', dataUrl: new URL('./data/', location.href).href, hostName: opts.name, settings: opts.settings, state: opts.state };
+    this.worker.postMessage(init);
+  }
+
+  private onWorker(m: WorkerOut) {
+    if (m.type === 'ready') {
+      this.state = m.state;
+      if (this.multiplayer) this.openRoom();
+      else { this.status = 'ready'; this.statusText = ''; }
+      this.notify();
+    } else if (m.type === 'patch') {
+      applyPatch(this.state, m.patch);
+      this.notify();
+      if (this.conns.size) void gzip(JSON.stringify(m.patch)).then((data) => {
+        for (const conn of this.conns.values()) if (conn.open) conn.send({ type: 'patch', data } satisfies Msg);
+      });
+    } else if (m.type === 'result') {
+      this.pending.get(m.id)?.(m.result);
+      this.pending.delete(m.id);
+    } else if (m.type === 'error') {
+      console.error('[sim]', m.message);
     }
-    if (opts.multiplayer) this.openRoom();
-    else { this.status = 'ready'; }
-    this.loop = window.setInterval(() => this.step(), 25);
+  }
+
+  private call<T>(msg: WithoutId<Extract<WorkerIn, { id: number }>>): Promise<T> {
+    const id = this.seq++;
+    return new Promise((resolve) => {
+      this.pending.set(id, resolve as (r: unknown) => void);
+      this.worker.postMessage({ ...msg, id } as WorkerIn);
+    });
   }
 
   private openRoom(attempt = 0) {
@@ -120,8 +132,6 @@ export class HostSession extends Session {
       this.notify();
     });
     peer.on('connection', (conn) => this.handleConnection(conn));
-    this.differ.prime(this.state);
-    this.broadcastTimer = window.setInterval(() => this.broadcast(), 250);
   }
 
   private handleConnection(conn: DataConnection) {
@@ -129,131 +139,32 @@ export class HostSession extends Session {
     conn.on('data', async (raw) => {
       const msg = raw as Msg;
       if (msg.type === 'hello') {
-        const existing = msg.playerId && this.state.players[msg.playerId] && !this.state.players[msg.playerId].connected ? msg.playerId : null;
-        if (!existing && this.state.phase === 'playing' && Object.keys(this.state.players).length >= 16) {
-          conn.send({ type: 'kicked', reason: 'Room is full' } satisfies Msg);
-          return;
-        }
-        playerId = existing ?? `p${Math.random().toString(36).slice(2, 8)}`;
-        if (!existing) this.state.players[playerId] = { id: playerId, name: (msg.name || 'Player').slice(0, 24), country: null, partyId: null, connected: true, isHost: false, ready: false };
-        else this.state.players[playerId].connected = true;
+        const r = await this.call<{ playerId?: string; error?: string }>({ type: 'join', name: msg.name, previousId: msg.playerId });
+        if (!r.playerId) { conn.send({ type: 'kicked', reason: r.error ?? 'Rejected' } satisfies Msg); return; }
+        playerId = r.playerId;
         this.conns.set(playerId, conn);
+        // the join patch has already been applied to our replica (worker messages are ordered)
         const data = await gzip(JSON.stringify(this.state));
         conn.send({ type: 'welcome', playerId, data } satisfies Msg);
-        addNews(this.state, 'world', `${this.state.players[playerId].name} ${existing ? 'reconnected' : 'joined the game'}`, []);
-        this.notify();
       } else if (msg.type === 'cmd' && playerId) {
-        const result = this.apply(playerId, msg.cmd);
+        const result = await this.call<CommandResult>({ type: 'cmd', playerId, cmd: msg.cmd });
         conn.send({ type: 'ack', id: msg.id, result } satisfies Msg);
       }
     });
     conn.on('close', () => {
-      if (playerId && this.state.players[playerId]) {
-        this.state.players[playerId].connected = false;
-        if (this.state.phase === 'lobby') {
-          assignPlayerCountry(this.state, playerId, null);
-          delete this.state.players[playerId];
-        }
-        this.conns.delete(playerId);
-        this.notify();
-      }
+      if (!playerId) return;
+      this.conns.delete(playerId);
+      this.worker.postMessage({ type: 'leave', playerId } satisfies WorkerIn);
     });
   }
 
-  private async broadcast() {
-    if (!this.conns.size) { this.differ.diff(this.state); return; }
-    const patch = this.differ.diff(this.state);
-    if (isEmptyPatch(patch)) return;
-    const data = await gzip(JSON.stringify(patch));
-    for (const conn of this.conns.values()) if (conn.open) conn.send({ type: 'patch', data } satisfies Msg);
+  send(cmd: AnyCommand): Promise<CommandResult> {
+    if (!this.state) return Promise.resolve({ ok: false, error: 'Still loading' });
+    return this.call<CommandResult>({ type: 'cmd', playerId: this.me, cmd });
   }
-
-  private step() {
-    const now = performance.now();
-    const dt = Math.min(1000, now - this.last);
-    this.last = now;
-    if (this.state.phase !== 'playing' || this.state.paused) { this.acc = 0; return; }
-    // pause automatically while the local player has an unanswered decision
-    this.acc += dt;
-    const per = SPEED_MS[this.state.speed] ?? 1000;
-    let ran = 0;
-    while (this.acc >= per && ran < 3) {
-      this.acc -= per;
-      advanceDay(this.state, this.world);
-      ran++;
-    }
-    if (ran) { this.onTick?.(); this.notify(); }
-    if (this.acc > per * 3) this.acc = 0;
-  }
-
-  apply(playerId: string, cmd: AnyCommand): CommandResult {
-    const r = this.applyInner(playerId, cmd);
-    this.notify();
-    return r;
-  }
-
-  private applyInner(playerId: string, cmd: AnyCommand): CommandResult {
-    const s = this.state;
-    const player = s.players[playerId];
-    if (!player) return { ok: false, error: 'Unknown player' };
-    switch (cmd.type) {
-      case 'lobbyPick':
-        if (s.phase === 'playing' && player.country) return { ok: false, error: 'You already lead a country' };
-        if (cmd.country) {
-          const holder = Object.values(s.players).find((p) => p.id !== playerId && p.country === cmd.country);
-          if (holder?.connected) return { ok: false, error: 'Taken by another player' };
-          // reclaim a country from a player who left (e.g. after re-hosting a saved game)
-          if (holder) { assignPlayerCountry(s, holder.id, null); delete s.players[holder.id]; }
-        }
-        assignPlayerCountry(s, playerId, cmd.country);
-        if (cmd.country) ensureCandidates(s, this.world, s.countries[cmd.country]);
-        if (cmd.country && s.phase === 'playing') addNews(s, 'world', `${player.name} takes over ${s.countries[cmd.country].name}`, [cmd.country], undefined, true);
-        return { ok: true };
-      case 'lobbyName':
-        player.name = cmd.name.slice(0, 24) || player.name;
-        return { ok: true };
-      case 'lobbyReady':
-        player.ready = cmd.ready;
-        return { ok: true };
-      case 'lobbySettings':
-        if (!player.isHost || s.phase !== 'lobby') return { ok: false, error: 'Only the host can change settings before start' };
-        if (cmd.settings.scenario && cmd.settings.scenario !== s.settings.scenario) {
-          // Rebuild the world for the new scenario, keeping players and their picks.
-          const fresh = createInitialState(this.world, { ...s.settings, ...cmd.settings }, Math.floor(Math.random() * 1e9));
-          fresh.players = s.players;
-          for (const p of Object.values(fresh.players)) {
-            const pick = p.country;
-            p.country = null; p.partyId = null;
-            if (pick) assignPlayerCountry(fresh, p.id, pick);
-          }
-          this.state = fresh;
-          return { ok: true };
-        }
-        if (cmd.settings.aiAggression !== undefined && s.settings.aiAggression > 0) {
-          const ratio = cmd.settings.aiAggression / s.settings.aiAggression;
-          for (const c of Object.values(s.countries)) c.ai.aggression = Math.min(1.5, c.ai.aggression * ratio);
-        }
-        Object.assign(s.settings, cmd.settings);
-        if (cmd.settings.startYear) s.startDate = `${cmd.settings.startYear}-01-01`;
-        return { ok: true };
-      case 'start':
-        if (!player.isHost) return { ok: false, error: 'Only the host can start' };
-        s.phase = 'playing';
-        s.paused = false;
-        for (const c of Object.values(s.countries)) recomputeCountryEconomy(s, this.world, c);
-        addNews(s, 'world', 'The game begins.', [], undefined, true);
-        return { ok: true };
-      default:
-        if (s.phase !== 'playing' && cmd.type !== 'party' && cmd.type !== 'chat') return { ok: false, error: 'Game has not started' };
-        return applyCommand(s, this.world, playerId, cmd);
-    }
-  }
-
-  async send(cmd: AnyCommand) { return this.apply(this.me, cmd); }
 
   leave() {
-    window.clearInterval(this.loop);
-    window.clearInterval(this.broadcastTimer);
+    this.worker.terminate();
     for (const c of this.conns.values()) c.close();
     this.peer?.destroy();
     this.status = 'closed';
