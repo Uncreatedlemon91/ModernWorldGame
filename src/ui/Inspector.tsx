@@ -22,7 +22,7 @@ export function Inspector() {
 }
 
 const ORDER_LABEL: Record<Order['kind'], string> = {
-  hold: 'Hold', move: 'Move', patrol: 'Patrol', blockade: 'Blockade', airSuperiority: 'Air superiority', groundSupport: 'Ground support', strategicBombing: 'Strategic bombing', amphibious: 'Amphibious landing',
+  hold: 'Hold', move: 'Move', patrol: 'Patrol', blockade: 'Blockade', airSuperiority: 'Air superiority', groundSupport: 'Ground support', strategicBombing: 'Strategic bombing', amphibious: 'Amphibious landing', missileStrike: 'Missile strike',
 };
 
 function FormationInspector({ id }: { id: string }) {
@@ -39,7 +39,8 @@ function FormationInspector({ id }: { id: string }) {
   const units = formationUnits(state, f);
   const counts = new Map<string, number>();
   for (const u of units) counts.set(u.type, (counts.get(u.type) ?? 0) + 1);
-  const orders: Order['kind'][] = domain === 'land' ? ['move', 'hold'] : domain === 'naval' ? ['move', 'patrol', 'blockade', ...(f.children.length ? ['amphibious' as const] : []), 'hold'] : ['airSuperiority', 'groundSupport', 'strategicBombing', 'move', 'hold'];
+  const hasMissiles = units.some((u) => UNIT_BY_ID[u.type].strike);
+  const orders: Order['kind'][] = [...(domain === 'land' ? ['move', 'hold'] as Order['kind'][] : domain === 'naval' ? ['move', 'patrol', 'blockade', ...(f.children.length ? ['amphibious' as const] : []), 'hold'] as Order['kind'][] : ['airSuperiority', 'groundSupport', 'strategicBombing', 'move', 'hold'] as Order['kind'][]), ...(hasMissiles ? ['missileStrike' as const] : [])];
   const airRange = domain === 'air' ? Math.min(...units.filter((u) => UNIT_BY_ID[u.type].domain === 'air').map((u) => UNIT_BY_ID[u.type].range ?? 0)) : 0;
   let eta = '';
   if (f.pos.path.length) {
@@ -70,6 +71,7 @@ function FormationInspector({ id }: { id: string }) {
       {domain === 'air' && <div className="kv"><span>Mission radius</span><span>{airRange} km</span></div>}
       <div className="kv"><span>Attack / Defense</span><span className="mono">{st.attack.toFixed(0)} / {st.defense.toFixed(0)}</span></div>
       {f.inCombat && <div className="callout bad">Engaged in combat</div>}
+      {f.supplied === false && <div className="callout warn">Out of supply — losing strength and organisation</div>}
       {mine && (
         <>
           <div className="order-buttons">

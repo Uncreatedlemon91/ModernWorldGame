@@ -240,6 +240,17 @@ export function issueOrder(state: GameState, world: StaticWorld, f: Formation, o
       f.pos.path = sp; f.pos.atSea = true; f.order = order;
       return null;
     }
+    case 'missileStrike': {
+      const shooters = formationUnits(state, f).filter((u) => UNIT_BY_ID[u.type].strike);
+      if (!shooters.length) return 'No missile-capable units (Missile Brigades, destroyers or submarines)';
+      const range = Math.max(...shooters.map((u) => UNIT_BY_ID[u.type].strikeRange ?? 0));
+      const t = world.regions[order.target];
+      const d = haversineKm(f.pos.lon, f.pos.lat, t.lon, t.lat);
+      if (d > range) return `Target out of missile range (${Math.round(d)} km > ${range} km)`;
+      if (!areEnemies(state, f.owner, state.regions[order.target].controller)) return 'You can only strike regions held by an enemy';
+      f.order = order;
+      return null;
+    }
     case 'airSuperiority':
     case 'groundSupport':
     case 'strategicBombing': {
@@ -369,6 +380,7 @@ export function militaryDaily(state: GameState, world: StaticWorld) {
   logisticsDaily(state, world, tops, domains);
   resolveLandBattles(state, world, attacks);
   resolveAir(state, world, tops, domains);
+  resolveMissiles(state, world, tops);
   resolveNaval(state, world, tops, domains);
 
   // Recovery, attrition and reserves
@@ -794,6 +806,41 @@ function resolveAir(state: GameState, world: StaticWorld, tops: Formation[], dom
         recordBattle(state, world, target, m.f.owner, region.owner);
       }
     }
+  }
+}
+
+// ---------------- Missiles ----------------
+
+function resolveMissiles(state: GameState, world: StaticWorld, tops: Formation[]) {
+  for (const f of tops) {
+    if (f.order.kind !== 'missileStrike') continue;
+    const target = f.order.target;
+    const region = state.regions[target];
+    if (!areEnemies(state, f.owner, region.controller)) { f.order = { kind: 'hold' }; continue; }
+    // salvo every 3 days
+    if ((state.tick + target) % 3 !== 0) continue;
+    const shooters = formationUnits(state, f).filter((u) => UNIT_BY_ID[u.type].strike);
+    let power = shooters.reduce((s, u) => s + (UNIT_BY_ID[u.type].strike ?? 0) * u.strength, 0) * techMult(state, f.owner);
+    // air defences intercept part of the salvo
+    let ad = (region.buildings.air_defense ?? 0) * 10;
+    for (const d of tops) if (d.pos.region === target && d.owner === region.controller) ad += formationUnits(state, d).reduce((s, u) => s + (UNIT_BY_ID[u.type].domain === 'land' ? UNIT_BY_ID[u.type].air * u.strength : 0), 0);
+    power *= 1 - Math.min(0.8, ad / (ad + power * 2 + 1));
+    const cost = shooters.length * 0.02;
+    const c = state.countries[f.owner];
+    if (c.milFund < cost) { f.order = { kind: 'hold' }; continue; }
+    c.milFund -= cost;
+    region.devastation = Math.min(100, region.devastation + power * 0.15);
+    region.productivity *= 1 - Math.min(0.01, power * 0.0002);
+    for (const d of tops) if (d.pos.region === target && areEnemies(state, d.owner, f.owner)) damageUnits(state, formationUnits(state, d), power * 0.0006, power * 0.002, f.owner);
+    if (Math.random() < power * 0.01) {
+      const bs = Object.keys(region.buildings);
+      if (bs.length) {
+        const b = bs[Math.floor(Math.random() * bs.length)];
+        region.buildings[b]--;
+        if (region.buildings[b] <= 0) delete region.buildings[b];
+      }
+    }
+    recordBattle(state, world, target, f.owner, region.controller);
   }
 }
 

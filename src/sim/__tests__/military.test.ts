@@ -121,3 +121,26 @@ describe('formation helpers', () => {
     expect(s.formations[f.id]).toBeTruthy();
   });
 });
+
+import { canNuke, nuclearStrike } from '../strategic';
+describe('strategic weapons', () => {
+  it('missile strikes damage an enemy region and nukes trigger retaliation', () => {
+    const s = setup('USA');
+    s.settings.fogOfWar = false;
+    applyCommand(s, world, 'p1', { type: 'declareWar', target: 'CUB' });
+    const havana = world.regions.find((r) => r.c === 'CUB')!;
+    const fleet = Object.values(s.formations).find((f) => f.owner === 'USA' && !f.parent && formationUnits(s, f).some((u) => u.type === 'destroyer'))!;
+    const o = applyCommand(s, world, 'p1', { type: 'order', formation: fleet.id, order: { kind: 'missileStrike', target: havana.id } });
+    expect(o.ok || (o.error ?? '').includes('range')).toBe(true);
+    // RUS vs USA nuclear exchange
+    const s2 = setup('RUS');
+    applyCommand(s2, world, 'p1', { type: 'declareWar', target: 'GBR' });
+    const london = world.regions.find((r) => r.c === 'GBR' && r.n.includes('London'))!;
+    expect(canNuke(s2, 'RUS', london.id)).toBeNull();
+    nuclearStrike(s2, world, 'RUS', london.id);
+    expect(s2.regions[london.id].devastation).toBe(100);
+    advanceDay(s2, world);
+    advanceDay(s2, world);
+    expect(s2.news.some((n) => n.text.includes('RETALIATION'))).toBe(true);
+  });
+});

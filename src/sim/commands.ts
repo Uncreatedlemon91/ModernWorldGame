@@ -14,6 +14,7 @@ import {
 } from './military';
 import { makeFormation } from './init';
 import { resolveDecision } from './events';
+import { canNuke, nuclearStrike } from './strategic';
 
 export type Command =
   | { type: 'setBudget'; key: BudgetKey; value: number }
@@ -39,6 +40,7 @@ export type Command =
   | { type: 'respond'; proposal: string; accept: boolean }
   | { type: 'cancelTreaty'; with: string; treaty: TreatyType }
   | { type: 'declareWar'; target: string }
+  | { type: 'nuke'; target: number }
   | { type: 'sanction'; target: string; on: boolean }
   | { type: 'improveRelations'; target: string }
   | { type: 'createOrg'; name: string; short: string; kind: 'military' | 'economic' | 'political'; color: string }
@@ -56,7 +58,7 @@ export interface CommandResult { ok: boolean; error?: string }
 const GOV_COMMANDS = new Set<Command['type']>([
   'setBudget', 'setTax', 'researchFocus', 'build', 'cancelBuild', 'queueUnit', 'cancelProduction', 'createFormation', 'assignUnit', 'assignFormation',
   'detachUnit', 'detachFormation', 'disbandFormation', 'renameFormation', 'disbandUnit', 'order', 'stance', 'propose', 'respond', 'cancelTreaty',
-  'declareWar', 'sanction', 'improveRelations', 'createOrg', 'inviteOrg', 'leaveOrg',
+  'declareWar', 'nuke', 'sanction', 'improveRelations', 'createOrg', 'inviteOrg', 'leaveOrg',
 ]);
 
 export function applyCommand(state: GameState, world: StaticWorld, playerId: string, cmd: Command): CommandResult {
@@ -256,6 +258,12 @@ export function applyCommand(state: GameState, world: StaticWorld, playerId: str
       if (cmd.target === c.id || !state.countries[cmd.target]) return err('Invalid target');
       if (areEnemies(state, c.id, cmd.target)) return err('Already at war');
       declareWar(state, world, c.id, cmd.target);
+      return ok;
+    }
+    case 'nuke': {
+      const e = canNuke(state, c.id, cmd.target);
+      if (e) return err(e);
+      nuclearStrike(state, world, c.id, cmd.target);
       return ok;
     }
     case 'sanction': {

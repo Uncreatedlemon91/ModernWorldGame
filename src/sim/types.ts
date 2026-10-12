@@ -148,7 +148,8 @@ export type Order =
   | { kind: 'airSuperiority'; target: number }
   | { kind: 'groundSupport'; target: number }
   | { kind: 'strategicBombing'; target: number }
-  | { kind: 'amphibious'; target: number };
+  | { kind: 'amphibious'; target: number }
+  | { kind: 'missileStrike'; target: number };
 
 export interface Position {
   region: number; // current region (land), or base/port region for naval when docked
@@ -300,7 +301,7 @@ export interface GameState {
   relations: Record<string, number>; // "AAA|BBB" sorted key -> opinion delta from base
   sanctions: Record<string, true>; // "FROM>TO"
   chat: ChatMessage[];
-  global: { oilPrice: number; worldGrowth: number; pandemic: { active: boolean; severity: number; until: number } };
+  global: { oilPrice: number; worldGrowth: number; pandemic: { active: boolean; severity: number; until: number }; pendingRetaliation?: { from: string; against: string; at: number }[] };
   nextId: number;
   seed: number;
 }

@@ -7,6 +7,7 @@ import { formationDomain, formationStrength, formationUnits, productionCapacity,
 import { fmtMoney, formatTickDate, fmtPop } from '../../sim/util';
 import { playerGoverns } from '../../sim/politics';
 import { warsOf, warSide } from '../../sim/diplomacy';
+import { canNuke } from '../../sim/strategic';
 import { iconDataUrl } from '../../map/icons';
 
 type Tab = 'forces' | 'production' | 'wars';
@@ -226,6 +227,25 @@ function Production() {
   );
 }
 
+function NuclearPanel() {
+  const { state, country } = useGame();
+  const send = useStore((s) => s.send);
+  const world = useStore((s) => s.world)!;
+  const selected = useStore((s) => s.selectedRegion);
+  if (!state || !country) return null;
+  const err = selected !== null ? canNuke(state, country.id, selected) : 'Select an enemy-held region on the map';
+  return (
+    <Section title={<span>☢ Strategic weapons</span>} right={<span className="small">{country.nukes} warheads</span>} collapsible>
+      <p className="muted small">Using a nuclear weapon devastates the target, turns the entire world against you, triggers sanctions from every nation, and invites nuclear retaliation.</p>
+      <div className="muted small">Target: {selected !== null ? world.regions[selected].n : 'none'}</div>
+      <button className="danger" disabled={Boolean(err)} title={err ?? ''} onClick={() => {
+        if (selected !== null && confirm(`Launch a nuclear strike on ${world.regions[selected].n}? This cannot be undone.`)) void send({ type: 'nuke', target: selected });
+      }}>Launch nuclear strike</button>
+      {err && <div className="muted small">{err}</div>}
+    </Section>
+  );
+}
+
 function Wars() {
   const { state, country } = useGame();
   const send = useStore((s) => s.send);
@@ -235,6 +255,7 @@ function Wars() {
   if (!wars.length) return <div className="muted">At peace. Declare war from the Diplomacy panel.</div>;
   return (
     <>
+      {country.nukes > 0 && <NuclearPanel />}
       {wars.map((w) => {
         const side = warSide(w, country.id)!;
         const myScore = side === 'attackers' ? w.score : -w.score;

@@ -4,6 +4,7 @@ import { Rng } from './rng';
 import { economyDaily, recomputeCountryEconomy } from './economy';
 import { holdElection, politicsMonthly, resolveBills, isDemocracy } from './politics';
 import { militaryDaily } from './military';
+import { strategicDaily } from './strategic';
 import { diplomacyDaily, diplomacyMonthly } from './diplomacy';
 import { eventsDaily, globalMonthly } from './events';
 import { aiDaily, aiMonthly } from './ai';
@@ -17,6 +18,7 @@ export function advanceDay(state: GameState, world: StaticWorld) {
   economyDaily(state, world);
   resolveBills(state);
   militaryDaily(state, world);
+  strategicDaily(state, world);
   diplomacyDaily(state, world);
   eventsDaily(state, world, rng);
   aiDaily(state, world, rng);
