@@ -198,7 +198,12 @@ export class HostSession extends Session {
     switch (cmd.type) {
       case 'lobbyPick':
         if (s.phase === 'playing' && player.country) return { ok: false, error: 'You already lead a country' };
-        if (cmd.country && Object.values(s.players).some((p) => p.id !== playerId && p.country === cmd.country)) return { ok: false, error: 'Taken by another player' };
+        if (cmd.country) {
+          const holder = Object.values(s.players).find((p) => p.id !== playerId && p.country === cmd.country);
+          if (holder?.connected) return { ok: false, error: 'Taken by another player' };
+          // reclaim a country from a player who left (e.g. after re-hosting a saved game)
+          if (holder) { assignPlayerCountry(s, holder.id, null); delete s.players[holder.id]; }
+        }
         assignPlayerCountry(s, playerId, cmd.country);
         if (cmd.country && s.phase === 'playing') addNews(s, 'world', `${player.name} takes over ${s.countries[cmd.country].name}`, [cmd.country], undefined, true);
         return { ok: true };

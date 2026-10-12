@@ -36,7 +36,7 @@ export function Lobby() {
 
   const myCountry = me.country ? state.countries[me.country] : null;
   const preview = state.countries[selectedCountry ?? me.country ?? ''] ?? null;
-  const takenBy = (id: string) => Object.values(state.players).find((p) => p.country === id);
+  const takenBy = (id: string) => Object.values(state.players).find((p) => p.country === id && (p.connected || p.id === me.id));
   const list = countries.filter((c) => (filter === 'all' || MAJORS[c.id]) && c.name.toLowerCase().includes(q.toLowerCase()));
   const party = me.partyId ? state.parties[me.partyId] : null;
   const pick = (id: string) => {

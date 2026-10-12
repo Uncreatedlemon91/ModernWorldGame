@@ -10,7 +10,7 @@ export function GameMenu() {
   const showTraffic = useStore((s) => s.showTraffic);
   const [busy, setBusy] = useState(false);
   if (!session || !state || !me || !world) return null;
-  const free = Object.values(state.countries).filter((c) => !Object.values(state.players).some((p) => p.country === c.id) && state.regions.some((r) => r.owner === c.id)).sort((a, b) => b.gdp - a.gdp);
+  const free = Object.values(state.countries).filter((c) => !Object.values(state.players).some((p) => p.country === c.id && p.connected) && state.regions.some((r) => r.owner === c.id)).sort((a, b) => b.gdp - a.gdp);
   const label = `${country?.name ?? 'Spectator'} — ${formatTickDate(state, state.tick)}`;
   return (
     <div className="panel-content">
