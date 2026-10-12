@@ -25,6 +25,7 @@ interface UIState {
   flyTo: { lon: number; lat: number; zoom?: number; seq: number } | null;
   showTraffic: boolean;
   showLabels: boolean;
+  showTutorial: boolean;
   setWorld: (w: StaticWorld) => void;
   setSession: (s: Session | null) => void;
   set: (p: Partial<UIState>) => void;
@@ -51,6 +52,7 @@ export const useStore = create<UIState>((set, get) => ({
   flyTo: null,
   showTraffic: true,
   showLabels: true,
+  showTutorial: false,
   setWorld: (world) => set({ world }),
   setSession: (session) => {
     unsub?.();

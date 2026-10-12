@@ -3,6 +3,7 @@ import { useGame, useStore } from '../../store';
 import { saveToBrowser, serializeSave } from '../../net/session';
 import { formatTickDate } from '../../sim/util';
 import { Flag, Section } from '../common';
+import { soundEnabled, setSoundEnabled } from '../sound';
 
 export function GameMenu() {
   const { session, state, me, country, world } = useGame();
@@ -35,8 +36,12 @@ export function GameMenu() {
           {session.roomCode && <p className="muted small">Saves include every player's country. Load as host later and your friends can rejoin with the new room code.</p>}
         </Section>
       )}
+      <Section title="Help">
+        <button onClick={() => useStore.setState({ showTutorial: true, panel: null })}>How to play</button>
+      </Section>
       <Section title="Display">
         <label className="check"><input type="checkbox" checked={showLabels} onChange={(e) => useStore.setState({ showLabels: e.target.checked })} /> Labels</label>
+        <label className="check"><input type="checkbox" defaultChecked={soundEnabled()} onChange={(e) => setSoundEnabled(e.target.checked)} /> Sound cues</label>
         <label className="check"><input type="checkbox" checked={showTraffic} onChange={(e) => useStore.setState({ showTraffic: e.target.checked })} /> Civilian traffic (ships, planes, cars, trains)</label>
       </Section>
       {!country && (

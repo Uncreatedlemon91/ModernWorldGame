@@ -16,6 +16,8 @@ import { Chat } from './panels/Chat';
 import { GameMenu } from './panels/GameMenu';
 import { Inspector } from './Inspector';
 import { Decisions, Proposals } from './Notifications';
+import { Tutorial } from './Tutorial';
+import { sfx } from './sound';
 
 const NAV: { id: Exclude<Panel, null>; icon: string; label: string }[] = [
   { id: 'overview', icon: '◉', label: 'Overview' },
@@ -45,9 +47,13 @@ export function Game() {
   const { session, state, me, country, world } = useGame();
   const panel = useStore((s) => s.panel);
   const flewHome = useRef(false);
+  useEffect(() => { if (window.innerWidth < 760) useStore.setState({ panel: null }); }, []);
 
   useEffect(() => {
     if (country && world && !flewHome.current) {
+      let seen = false;
+      try { seen = localStorage.getItem('mw.tutorial.done') === '1'; } catch { /* ignore */ }
+      if (!seen) useStore.setState({ showTutorial: true });
       flewHome.current = true;
       const cap = world.regions[country.capital];
       useStore.getState().fly(cap.lon, cap.lat, (world.countryByA3.get(country.id)?.regions.length ?? 1) > 20 ? 2.8 : 3.8);
@@ -61,6 +67,24 @@ export function Game() {
     if (session?.isHost && !session.roomCode && decisionCount > prevDecisions.current && !state?.paused) void session.send({ type: 'setPaused', paused: true });
     prevDecisions.current = decisionCount;
   }, [decisionCount, session, state]);
+
+  // Sound cues for events that concern the player
+  const lastNews = useRef<string | null>(null);
+  const newsLen = state?.news.length ?? 0;
+  useEffect(() => {
+    if (!state || !me?.country) return;
+    const latest = state.news[state.news.length - 1];
+    if (!latest || latest.id === lastNews.current) return;
+    const fresh = lastNews.current === null ? [] : state.news.slice(state.news.findIndex((n) => n.id === lastNews.current) + 1);
+    lastNews.current = latest.id;
+    const mine = fresh.filter((n) => n.countries.includes(me.country!));
+    if (mine.some((n) => n.text.startsWith('WAR') || n.text.startsWith('NUCLEAR'))) sfx.war();
+    else if (mine.some((n) => n.cat === 'election')) sfx.election();
+    else if (mine.some((n) => n.cat === 'military' && n.text.includes('captures'))) (mine.find((n) => n.text.startsWith(state.countries[me.country!].name)) ? sfx.good : sfx.bad)();
+  }, [newsLen, state, me]);
+  const pendingCount = state && country ? Object.values(state.decisions).filter((d) => d.country === country.id).length + Object.values(state.proposals).filter((p) => p.to === country.id).length : 0;
+  const prevPending = useRef(0);
+  useEffect(() => { if (pendingCount > prevPending.current) sfx.alert(); prevPending.current = pendingCount; }, [pendingCount]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -109,6 +133,7 @@ export function Game() {
         <Inspector />
       </div>
       <BottomBar />
+      <Tutorial />
       {!country && <div className="spectator-banner">You are spectating — open the menu to take over a free country.</div>}
     </div>
   );

@@ -6,6 +6,7 @@ Each player leads a political party in charge of a country: set taxes and budget
 
 ## Features
 
+- **Scenarios**: *The world today* (the default) starts with the situation as of mid-2025: the Russia–Ukraine war with occupied oblasts, the war in Gaza, civil conflicts (Sudan, Myanmar, the Sahel and others) and Western sanctions on Russia, Iran and North Korea. *Peaceful 2026* starts with no wars.
 - **Real-world globe**: NASA Blue Marble imagery on a 3D globe, with 1,541 playable regions (US states, Chinese provinces, Russian oblasts, German Länder and so on) and ~2,900 real cities.
 - **Living map**:
   - Cities glow and sprawl as their regions grow richer.
@@ -21,12 +22,17 @@ Each player leads a political party in charge of a country: set taxes and budget
   - Campaign with rallies, canvassing and ads.
   - Lose an election and you go into opposition (configurable).
   - Autocracies rule by decree but face coups.
+  - A four-minister cabinet (Finance, Foreign, Defense, Interior). Competent ministers help; corrupt ones cause scandals.
+  - Referendums let democracies bypass the legislature.
+  - Charts track polls, approval, GDP, debt and the stock market over time.
 - **26 laws** covering healthcare, labour, trade, immigration, press, policing, surveillance, conscription, nuclear doctrine, the electoral system, carbon and energy.
 - **Economy**:
   - Taxes and eight spending lines, with deficits, debt, interest and credit ratings.
   - Inflation and unemployment.
   - Energy supply, trade openness, three research tracks and 21 building types.
   - The growth breakdown shows why your economy is moving.
+  - Oil & gas, minerals, food and manufactured goods are produced and traded. World prices follow global supply and demand, and surpluses earn export income.
+  - Each country has a stock market index.
 - **Diplomacy**:
   - Opinions and blocs.
   - Trade, non-aggression, access, research, defensive and alliance treaties.
@@ -37,7 +43,10 @@ Each player leads a political party in charge of a country: set taxes and budget
   - Group battalions into regiments.
   - Combine regiments and squadrons into armies, or flotillas, squadrons and embarked regiments into task forces.
   - You never place units directly. Give orders instead: move, attack, patrol, blockade, air superiority, ground support, strategic bombing, amphibious landing.
-  - Combat accounts for terrain, fortifications, technology, organisation, air cover and encirclement.
+  - Combat accounts for terrain, entrenchment, technology, organisation, air cover and encirclement. Attacks need local superiority.
+  - Logistics: units cut off from friendly territory waste away, harsh terrain causes attrition, and partisans retake occupied regions left unguarded.
+  - Missile strikes (missile brigades, destroyers, submarines) and nuclear weapons, with global consequences and retaliation.
+  - Fog of war: enemy forces are only visible near your territory, units, fleets and air missions.
 - **Events** with decisions: hurricanes, earthquakes, wildfires, floods, protests, riots, strikes, scandals, terror attacks, epidemics (which can become pandemics), resource discoveries, investment booms and coups.
 - **Multiplayer** in private rooms with a 6-letter code, plus single-player and save/load (browser storage or a downloadable file).
 
@@ -61,9 +70,13 @@ Tests (headless simulation):
 npm test
 ```
 
+### Hosting on GitHub Pages
+
+`.github/workflows/pages.yml` builds, tests and deploys the game whenever `main` is updated (or when run manually). To turn it on, open the repository's **Settings → Pages** and set **Source** to **GitHub Actions**. The game is then served at `https://<owner>.github.io/<repo>/`.
+
 ## Multiplayer
 
-The host's browser runs the authoritative simulation. Other players connect directly to it over WebRTC and receive compressed state diffs about four times a second. Their commands are validated by the host. The host controls pause and speed. If the host leaves, the game ends, but the host can save and later re-host, and friends rejoin with the new room code.
+The host's browser runs the authoritative simulation in a Web Worker, so rendering stays smooth. Other players connect directly to it over WebRTC and receive compressed state diffs about four times a second. Their commands are validated by the host. The host controls pause and speed. If the host leaves, the game ends, but the host can save and later re-host, and friends rejoin with the new room code.
 
 Players find each other through a PeerJS signalling server. By default the free public PeerJS cloud server is used. To run your own:
 
