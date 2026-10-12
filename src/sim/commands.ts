@@ -332,8 +332,17 @@ export function applyCommand(state: GameState, world: StaticWorld, playerId: str
       if (cmd.name) party.name = cmd.name.slice(0, 50);
       if (cmd.short) party.short = cmd.short.slice(0, 8);
       if (cmd.color) party.color = hexToRgb(cmd.color);
+      const before = { ...party.ideology };
       if (cmd.econ !== undefined) party.ideology.econ = clamp(cmd.econ, -1, 1);
       if (cmd.social !== undefined) party.ideology.social = clamp(cmd.social, -1, 1);
+      // Flip-flopping during the game costs credibility with voters.
+      if (state.phase === 'playing') {
+        const shift = Math.abs(party.ideology.econ - before.econ) + Math.abs(party.ideology.social - before.social);
+        if (shift > 0.05) {
+          party.momentum -= shift * 0.8;
+          addNews(state, 'politics', `${party.name} shifts its platform; critics accuse it of flip-flopping`, [c.id]);
+        }
+      }
       return ok;
     }
   }

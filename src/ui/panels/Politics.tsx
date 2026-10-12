@@ -1,5 +1,5 @@
 import { useGame, useStore } from '../../store';
-import { Section, Empty, Swatch, Meter } from '../common';
+import { Section, Empty, Swatch, Meter, Slider } from '../common';
 import { rgbCss } from '../../map/colors';
 import { billVotes, isDemocracy, nationalVote, playerGoverns, ideologyDistance } from '../../sim/politics';
 import { LAW_BY_ID, lawOption } from '../../sim/content/laws';
@@ -105,6 +105,15 @@ export function Politics() {
           <div className="small muted">Closest rival: {parties.filter((p) => p.id !== party.id).sort((a, b) => ideologyDistance(a.ideology, party.ideology) - ideologyDistance(b.ideology, party.ideology))[0]?.name ?? '—'}</div>
         )}
       </Section>
+      {party && (
+        <Section title="Your platform" collapsible>
+          <div className="ideology-row"><span>Economy</span><span className="muted small">Left</span>
+            <Slider value={party.ideology.econ} min={-1} max={1} step={0.05} onCommit={(v) => send({ type: 'party', econ: v })} format={(v) => v.toFixed(2)} /><span className="muted small">Right</span></div>
+          <div className="ideology-row"><span>Society</span><span className="muted small">Progressive</span>
+            <Slider value={party.ideology.social} min={-1} max={1} step={0.05} onCommit={(v) => send({ type: 'party', social: v })} format={(v) => v.toFixed(2)} /><span className="muted small">Conservative</span></div>
+          <p className="muted small">Moving toward voters can win them over, but every shift costs momentum as opponents accuse you of flip-flopping.</p>
+        </Section>
+      )}
       {!governs && <div className="callout">In opposition you cannot set budgets, build, command forces or conduct diplomacy.</div>}
     </div>
   );

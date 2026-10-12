@@ -161,9 +161,9 @@ class MapController {
     const m = this.map;
     const zoomSize = (small: number, large: number): ExpressionSpecification => ['interpolate', ['linear'], ['zoom'], 2, small, 7, large];
     m.addLayer({
-      id: SYMBOL_BASE, type: 'symbol', source: 'buildings', minzoom: 3.8,
+      id: SYMBOL_BASE, type: 'symbol', source: 'buildings', minzoom: 4.7,
       layout: { 'icon-image': ['get', 'icon'], 'icon-size': zoomSize(0.45, 0.85), 'icon-allow-overlap': true, 'icon-ignore-placement': true },
-      paint: { 'icon-color': ['get', 'color'], 'icon-halo-color': 'rgba(0,0,0,0.75)', 'icon-halo-width': 1.2, 'icon-opacity': ['interpolate', ['linear'], ['zoom'], 3.8, 0, 4.3, 1] },
+      paint: { 'icon-color': ['get', 'color'], 'icon-halo-color': 'rgba(0,0,0,0.75)', 'icon-halo-width': 1.2, 'icon-opacity': ['interpolate', ['linear'], ['zoom'], 4.7, 0, 5.1, 1] },
     });
     m.addLayer({
       id: 'events-sym', type: 'symbol', source: 'events',

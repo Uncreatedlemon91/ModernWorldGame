@@ -10,5 +10,5 @@
 import { PeerServer } from 'peer';
 
 const port = Number(process.env.PORT || 9000);
-PeerServer({ port, path: '/', allow_discovery: false, proxied: Boolean(process.env.PROXIED) });
+PeerServer({ port, host: process.env.HOST || '0.0.0.0', path: '/', allow_discovery: false, proxied: Boolean(process.env.PROXIED) });
 console.log(`Modern World signalling server listening on :${port}`);

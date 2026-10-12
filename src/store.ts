@@ -92,3 +92,6 @@ export function useGame() {
   const country = me?.country && state ? state.countries[me.country] : undefined;
   return { session, world, state, me, country };
 }
+
+// Handy for debugging from the browser console.
+(window as unknown as { __store?: typeof useStore }).__store = useStore;
