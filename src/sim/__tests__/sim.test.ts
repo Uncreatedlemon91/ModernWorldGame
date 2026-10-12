@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { loadWorldFromDisk } from './loadWorld';
-import { createInitialState } from '../init';
+import { createInitialState, DEFAULT_SETTINGS } from '../init';
 import { advanceDay } from '../tick';
 import { applyCommand, assignPlayerCountry } from '../commands';
 import { formationDomain } from '../military';
@@ -49,7 +49,7 @@ describe('simulation', () => {
   });
 
   it('lets a player govern: budget, laws, construction, production and war', () => {
-    const s = createInitialState(world, undefined, 3);
+    const s = createInitialState(world, { ...DEFAULT_SETTINGS, scenario: 'peaceful' }, 3);
     s.players.p1 = { id: 'p1', name: 'A', country: null, partyId: null, connected: true, isHost: true, ready: true };
     assignPlayerCountry(s, 'p1', 'FRA');
     expect(applyCommand(s, world, 'p1', { type: 'setBudget', key: 'health', value: 8 }).ok).toBe(true);

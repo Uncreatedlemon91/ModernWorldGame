@@ -207,6 +207,7 @@ export function aiProposalScore(state: GameState, p: Proposal): number {
     case 'peace': {
       const war = state.wars[p.kind.war];
       if (!war) return -100;
+      if ((war.noPeaceBefore ?? 0) > state.tick) return -100;
       const side = warSide(war, p.to);
       const myScore = side === 'attackers' ? war.score : -war.score;
       const lost = p.kind.cede.filter((r) => state.regions[r]?.owner === p.to).length;

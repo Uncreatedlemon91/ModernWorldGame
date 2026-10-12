@@ -366,6 +366,7 @@ export function militaryDaily(state: GameState, world: StaticWorld) {
     else stepAirMove(state, world, f);
   }
 
+  logisticsDaily(state, world, tops, domains);
   resolveLandBattles(state, world, attacks);
   resolveAir(state, world, tops, domains);
   resolveNaval(state, world, tops, domains);
@@ -509,12 +510,59 @@ function stepAirMove(_state: GameState, world: StaticWorld, f: Formation) {
   void world;
 }
 
+// ---------------- Logistics, entrenchment, resistance ----------------
+
+const HARSH = new Set(['arctic', 'desert', 'jungle', 'mountains']);
+
+export function isFriendlyTo(state: GameState, owner: string, regionId: number) {
+  const ctrl = state.regions[regionId]?.controller;
+  return ctrl === owner || (ctrl !== undefined && hasMilitaryAccess(state, owner, ctrl) && !areEnemies(state, owner, ctrl));
+}
+
+function logisticsDaily(state: GameState, world: StaticWorld, tops: Formation[], domains: Map<string, UnitDomain>) {
+  const occupierPresent = new Set<number>();
+  for (const f of tops) {
+    const domain = domains.get(f.id);
+    if (domain !== 'land' || f.pos.atSea) { f.supplied = true; continue; }
+    const here = f.pos.region;
+    const supplied = isFriendlyTo(state, f.owner, here) || world.regions[here].nb.some((n) => isFriendlyTo(state, f.owner, n));
+    f.supplied = supplied;
+    const units = formationUnits(state, f);
+    if (!supplied) {
+      for (const u of units) { u.org = Math.max(0, u.org - 0.03); u.strength = Math.max(0.02, u.strength - 0.004); }
+    }
+    if (f.pos.pathRegions.length && HARSH.has(world.regions[here].terrain)) {
+      for (const u of units) u.strength = Math.max(0.02, u.strength - 0.0008);
+    }
+    const r = state.regions[here];
+    if (r.controller === f.owner && !f.pos.pathRegions.length) {
+      // troops holding ground dig in
+      const cap = 8 + (r.buildings.fortifications ?? 0) * 5;
+      r.fort = Math.min(cap, r.fort + 0.04);
+    }
+    if (r.controller === f.owner && r.owner !== f.owner) {
+      occupierPresent.add(here);
+      if (r.unrest > 60) for (const u of units) u.strength = Math.max(0.02, u.strength - 0.0015 * (r.unrest / 100));
+    }
+  }
+  // Partisans retake occupied regions left without a garrison
+  for (const r of state.regions) {
+    if (r.owner === r.controller || occupierPresent.has(r.id)) continue;
+    if (!areEnemies(state, r.owner, r.controller)) continue;
+    if (r.unrest > 60 && Math.random() < 0.003 * (r.unrest / 60)) {
+      const occ = r.controller;
+      r.controller = r.owner;
+      addNews(state, 'military', `Partisans drive ${state.countries[occ]?.name} out of ${world.regions[r.id].n}`, [r.owner, occ], r.id, Boolean(state.countries[r.owner]?.playerId || state.countries[occ]?.playerId));
+    }
+  }
+}
+
 // ---------------- Land combat ----------------
 
 function regionGarrisonMax(state: GameState, world: StaticWorld, id: number) {
   const r = state.regions[id];
   const c = state.countries[r.controller];
-  return (1.5 + Math.sqrt(world.regions[id].pop / 1e6) * 1.5) * (1 + r.fort * 0.15) * (c ? 1 + c.tech.military * 0.05 : 1);
+  return (3 + Math.sqrt(world.regions[id].pop / 1e6) * 3) * (1 + r.fort * 0.15) * (c ? 1 + c.tech.military * 0.05 : 1);
 }
 
 const garrison = new Map<number, number>(); // transient militia health, rebuilt when no battle
@@ -589,11 +637,11 @@ function resolveLandBattles(state: GameState, world: StaticWorld, attacks: Attac
     const stanceAtt = validAtks[0].f.stance === 'aggressive' ? 1.15 : validAtks[0].f.stance === 'defensive' ? 0.85 : 1;
     A *= stanceAtt;
 
-    const total = A + D || 1;
-    const intensity = 0.05;
-    damageUnits(state, defUnits, intensity * (A / total) * 0.7, intensity * 2.2 * (A / total), attackerCountry);
-    damageUnits(state, attUnits, intensity * (D / total) * 0.6, intensity * 2 * (D / total), defOwner);
-    garrison.set(target, Math.max(0, g - (A / total) * gMax * 0.08));
+    // Defenders hold the advantage: a breakthrough needs a sustained local superiority of roughly 1.5–2:1.
+    const ratio = Math.max(0.2, Math.min(5, A / Math.max(1, D)));
+    damageUnits(state, defUnits, 0.012 * Math.pow(ratio, 0.7), 0.035 * Math.pow(ratio, 1.2) * (ratio < 1.2 ? 0.55 : 1), attackerCountry);
+    damageUnits(state, attUnits, 0.016 * Math.pow(1 / ratio, 0.7), 0.05 * Math.pow(1 / ratio, 0.8), defOwner);
+    garrison.set(target, Math.max(0, g - gMax * 0.03 * Math.pow(ratio, 1.3) * (ratio < 1.2 ? 0.4 : 1)));
     region.devastation = Math.min(100, region.devastation + 0.4);
     region.unrest = Math.min(100, region.unrest + 0.3);
     for (const a of validAtks) a.f.inCombat = true;
@@ -610,6 +658,8 @@ function resolveLandBattles(state: GameState, world: StaticWorld, attacks: Attac
       region.controller = attackerCountry;
       garrison.delete(target);
       region.fort = 0;
+      // the advance itself costs cohesion
+      for (const a of validAtks) for (const u of formationUnits(state, a.f)) u.org = Math.max(0, u.org - 0.25);
       const winner = validAtks.sort((a, b) => formationStrength(state, b.f).attack - formationStrength(state, a.f).attack)[0].f;
       for (const a of validAtks) {
         if (a.f !== winner) continue;

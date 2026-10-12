@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { loadWorldFromDisk } from './loadWorld';
-import { createInitialState, makeFormation } from '../init';
+import { createInitialState, makeFormation, DEFAULT_SETTINGS } from '../init';
 import { advanceDay } from '../tick';
 import { applyCommand, assignPlayerCountry } from '../commands';
 import { formationDomain, formationUnits } from '../military';
@@ -10,7 +10,7 @@ import type { GameState } from '../types';
 const world = loadWorldFromDisk();
 
 function setup(country: string): GameState {
-  const s = createInitialState(world, undefined, 11);
+  const s = createInitialState(world, { ...DEFAULT_SETTINGS, scenario: 'peaceful' }, 11);
   s.phase = 'playing';
   s.players.p1 = { id: 'p1', name: 'A', country: null, partyId: null, connected: true, isHost: true, ready: true };
   assignPlayerCountry(s, 'p1', country);

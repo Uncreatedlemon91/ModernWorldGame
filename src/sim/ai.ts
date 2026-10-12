@@ -194,29 +194,56 @@ function aiWarOps(state: GameState, world: StaticWorld, c: Country, rng: Rng) {
     const nb = world.regions[r.id].nb;
     if (nb.some((n) => state.regions[n].controller === c.id)) { front.push(r.id); for (const n of nb) if (state.regions[n].controller === c.id) threatened.push(n); }
   }
+  const landForces = tops.filter((f) => formationDomain(state, f) === 'land' && formationStrength(state, f).count > 0);
+  const frontSet = [...new Set(threatened)];
+  // 1) Hold the line: every threatened region keeps (or gets) a defender.
+  const holding = new Set<string>();
+  const covered = new Set<number>();
+  for (const f of landForces) {
+    if (!f.pos.pathRegions.length && frontSet.includes(f.pos.region) && !covered.has(f.pos.region)) { covered.add(f.pos.region); holding.add(f.id); f.stance = 'defensive'; }
+  }
+  for (const r of frontSet) {
+    if (covered.has(r)) continue;
+    const here = world.regions[r];
+    const spare = landForces.filter((f) => !holding.has(f.id) && !f.inCombat && !f.pos.pathRegions.length)
+      .sort((x, y) => Math.hypot(world.regions[x.pos.region].lon - here.lon, world.regions[x.pos.region].lat - here.lat) - Math.hypot(world.regions[y.pos.region].lon - here.lon, world.regions[y.pos.region].lat - here.lat))[0];
+    if (!spare) break;
+    if (!issueOrder(state, world, spare, { kind: 'move', target: r })) { holding.add(spare.id); covered.add(r); spare.stance = 'defensive'; }
+  }
+  // 2) Attack only with spare, rested formations that have local superiority.
+  const enemyDefense = (t: number) => {
+    let d = 0;
+    for (const e of Object.values(state.formations)) if (!e.parent && e.pos.region === t && enemies.has(e.owner) && !e.pos.pathRegions.length) d += formationStrength(state, e).defense;
+    const pop = world.regions[t].pop;
+    return d + (3 + Math.sqrt(pop / 1e6) * 3) * 5 * (1 + state.regions[t].fort * 0.08);
+  };
+  for (const f of landForces) {
+    if (holding.has(f.id) || f.inCombat || f.pos.pathRegions.length) continue;
+    const fs = formationStrength(state, f);
+    if (fs.org < 0.6 || fs.strength < 0.55) continue; // recover first
+    f.stance = 'balanced';
+    if (!front.length) {
+      const target = [...enemies].map((e) => state.countries[e]?.capital).find((cap) => cap !== undefined);
+      if (target !== undefined && rng.chance(0.3)) issueOrder(state, world, f, { kind: 'move', target });
+      continue;
+    }
+    let best = -1, bestScore = -Infinity;
+    const here = world.regions[f.pos.region];
+    for (const t of front) {
+      const tr = world.regions[t];
+      const d = Math.hypot(tr.lon - here.lon, tr.lat - here.lat);
+      const ratio = (fs.attack * (1 + c.tech.military * 0.08)) / Math.max(1, enemyDefense(t));
+      const probing = rng.chance(0.06 * c.ai.aggression) && ratio > 0.7; // grinding offensives
+      if (ratio < 1.4 - c.ai.aggression * 0.3 && !probing) continue;
+      const score = -d + ratio * 3 + (state.regions[t].owner === c.id ? 12 : 0) + (state.countries[state.regions[t].owner]?.capital === t ? 4 : 0) + rng.next() * 2;
+      if (score > bestScore) { bestScore = score; best = t; }
+    }
+    if (best >= 0) issueOrder(state, world, f, { kind: 'move', target: best });
+  }
   for (const f of tops) {
     const domain = formationDomain(state, f);
     if (domain === 'land') {
-      if (f.inCombat || f.pos.pathRegions.length) continue;
-      const fs = formationStrength(state, f);
-      if (fs.count === 0) continue;
-      if (fs.org < 0.5 || fs.strength < 0.5) continue; // recover first
-      if (!front.length) {
-        // no shared border: try to reach the enemy over land
-        const target = [...enemies].map((e) => state.countries[e]?.capital).find((cap) => cap !== undefined);
-        if (target !== undefined && rng.chance(0.3)) issueOrder(state, world, f, { kind: 'move', target });
-        continue;
-      }
-      if (f.stance === 'defensive' && threatened.includes(f.pos.region)) continue;
-      // pick a target close to this formation, preferring weakly held regions
-      let best = -1, bestScore = -Infinity;
-      for (const t of front) {
-        const tr = world.regions[t], here = world.regions[f.pos.region];
-        const d = Math.hypot(tr.lon - here.lon, tr.lat - here.lat);
-        const score = -d + (state.regions[t].owner === c.id ? 15 : 0) + (state.countries[state.regions[t].owner]?.capital === t ? 6 : 0) + rng.next() * 3;
-        if (score > bestScore) { bestScore = score; best = t; }
-      }
-      if (best >= 0) issueOrder(state, world, f, { kind: 'move', target: best });
+      continue;
     } else if (domain === 'air') {
       if (f.order.kind !== 'hold' && rng.chance(0.8)) continue;
       const target = front.length ? front[Math.floor(rng.next() * front.length)] : threatened[0];
@@ -244,6 +271,7 @@ function aiPeace(state: GameState, c: Country) {
   for (const w of warsOf(state, c.id)) {
     const side = warSide(w, c.id)!;
     if (w[side][0] !== c.id) continue; // only war leaders negotiate
+    if ((w.noPeaceBefore ?? 0) > state.tick) continue;
     const myScore = side === 'attackers' ? w.score : -w.score;
     const years = (state.tick - w.start) / 365;
     const enemyLeader = side === 'attackers' ? w.defenders[0] : w.attackers[0];

@@ -173,6 +173,7 @@ export interface Formation {
   stance: 'balanced' | 'aggressive' | 'defensive';
   inCombat: boolean;
   manned: boolean; // has ever held units; emptied manned formations are removed
+  supplied?: boolean; // land formations cut off from friendly territory lose strength and organisation
   amphibious?: boolean; // currently assaulting from the sea
 }
 
@@ -199,6 +200,7 @@ export interface War {
   score: number; // -100..100 positive favours attackers
   casualties: Record<string, number>;
   battles: Battle[];
+  noPeaceBefore?: number; // AI won't negotiate before this tick
 }
 
 export interface Battle { region: number; lon: number; lat: number; attacker: string; defender: string; started: number; intensity: number }
@@ -264,6 +266,7 @@ export interface Player {
 export interface ChatMessage { id: string; tick: number; from: string; name: string; text: string; to?: string }
 
 export interface GameSettings {
+  scenario: 'realworld' | 'peaceful';
   startYear: number;
   electionsCanRemovePlayers: boolean;
   aiAggression: number; // 0..2

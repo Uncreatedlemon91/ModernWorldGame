@@ -230,8 +230,9 @@ export function economyDaily(state: GameState, world: StaticWorld) {
     const unrestT = clamp((60 - c.approval) * 0.45 + e.unrest + (r.prosperity < 30 ? 8 : 0) + (occupied ? 45 : 0) - c.budget.police * 2 + bUnrest
       + r.devastation * 0.2 + (c.laws.emergency_powers === 'martial_law' ? -10 : 0) + modifierSum(c, 'unrest') + (100 - c.stability) * 0.1, 0, 100);
     r.unrest += (unrestT - r.unrest) / 40;
-    r.fort = Math.min(bDefense + 2, r.fort + 0.02);
-    if (r.fort > bDefense + 2) r.fort = bDefense + 2;
+    // baseline defences grow to the level the buildings support; troops can dig in further (military.ts)
+    if (r.fort < bDefense + 2) r.fort = Math.min(bDefense + 2, r.fort + 0.02);
+    else r.fort = Math.max(bDefense + 2, r.fort - 0.01);
 
     // Construction
     if (r.construction.length && !occupied) {

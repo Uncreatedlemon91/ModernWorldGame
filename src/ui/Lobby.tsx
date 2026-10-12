@@ -8,6 +8,7 @@ import { rgbCss } from '../map/colors';
 import { GOV_NAMES } from './labels';
 import { BLOC_NAMES } from '../sim/blocs';
 import { countryPop } from '../sim/economy';
+import { SCENARIOS } from '../sim/content/scenarios';
 
 export function Lobby() {
   const { session, state, me, world } = useGame();
@@ -78,6 +79,12 @@ export function Lobby() {
         </Section>
         <Section title="Game settings">
           <div className="settings-grid">
+            <label>Scenario</label>
+            <select disabled={!me.isHost} value={state.settings.scenario ?? 'peaceful'} onChange={(e) => send({ type: 'lobbySettings', settings: { scenario: e.target.value as 'realworld' | 'peaceful' } })}>
+              {SCENARIOS.map((sc) => <option key={sc.id} value={sc.id}>{sc.name}</option>)}
+            </select>
+            <span />
+            <span className="muted small">{SCENARIOS.find((sc) => sc.id === (state.settings.scenario ?? 'peaceful'))?.desc}</span>
             <label>Start year</label>
             <select disabled={!me.isHost} value={state.settings.startYear} onChange={(e) => send({ type: 'lobbySettings', settings: { startYear: Number(e.target.value) } })}>
               {[2025, 2026, 2027, 2030].map((y) => <option key={y} value={y}>{y}</option>)}

@@ -215,6 +215,18 @@ export class HostSession extends Session {
         return { ok: true };
       case 'lobbySettings':
         if (!player.isHost || s.phase !== 'lobby') return { ok: false, error: 'Only the host can change settings before start' };
+        if (cmd.settings.scenario && cmd.settings.scenario !== s.settings.scenario) {
+          // Rebuild the world for the new scenario, keeping players and their picks.
+          const fresh = createInitialState(this.world, { ...s.settings, ...cmd.settings }, Math.floor(Math.random() * 1e9));
+          fresh.players = s.players;
+          for (const p of Object.values(fresh.players)) {
+            const pick = p.country;
+            p.country = null; p.partyId = null;
+            if (pick) assignPlayerCountry(fresh, p.id, pick);
+          }
+          this.state = fresh;
+          return { ok: true };
+        }
         if (cmd.settings.aiAggression !== undefined && s.settings.aiAggression > 0) {
           const ratio = cmd.settings.aiAggression / s.settings.aiAggression;
           for (const c of Object.values(s.countries)) c.ai.aggression = Math.min(1.5, c.ai.aggression * ratio);

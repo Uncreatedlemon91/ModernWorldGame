@@ -11,8 +11,10 @@ import { Rng, hashString } from './rng';
 import { clamp, hexToRgb, newId } from './util';
 import { isDemocracy, defaultElectionInterval, groupTargets, politicsMonthly } from './politics';
 import { recomputeCountryEconomy, regionGdp } from './economy';
+import { applyScenario } from './content/scenarios';
 
 export const DEFAULT_SETTINGS: GameSettings = {
+  scenario: 'realworld',
   startYear: 2026,
   electionsCanRemovePlayers: true,
   aiAggression: 1,
@@ -269,6 +271,8 @@ export function createInitialState(world: StaticWorld, settings: GameSettings = 
 
   // ---- Military ----
   for (const sc of world.countries) seedMilitary(state, world, state.countries[sc.a3], rng);
+
+  applyScenario(state, world, settings.scenario ?? 'peaceful');
 
   for (const c of Object.values(state.countries)) recomputeCountryEconomy(state, world, c, true);
   for (const c of Object.values(state.countries)) {
