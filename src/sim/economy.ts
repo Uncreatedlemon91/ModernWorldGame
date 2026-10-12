@@ -5,6 +5,7 @@ import { BUILDING_BY_ID } from './content/buildings';
 import { UNIT_BY_ID } from './content/units';
 import { clamp } from './util';
 import { atWar } from './diplomacy';
+import { cabinetSkill } from './cabinet';
 
 export const regionGdp = (r: Region) => (r.pop * r.productivity) / 1e6 * (1 - r.devastation / 150);
 
@@ -76,7 +77,7 @@ export function taxRevenueShare(c: Country, e = lawEffects(c)): number {
   const t = c.taxes;
   // + 5% of GDP from fees and social contributions
   const raw = (t.income * 0.6 + t.corporate * 0.2 + t.sales * 0.7 + t.tariffs * c.tradeOpenness * 0.6 + 5) / 100;
-  const compliance = 1 - c.corruption / 250;
+  const compliance = 1 - c.corruption / 250 + cabinetSkill(c, 'finance') * 0.04;
   // Laffer: very high rates erode the base
   const burden = (t.income + t.corporate + t.sales) / 3;
   const laffer = burden > 35 ? 1 - (burden - 35) * 0.015 : 1;
@@ -125,7 +126,8 @@ export function recomputeCountryEconomy(state: GameState, _world: StaticWorld, c
 
   // Fiscal
   const revShare = taxRevenueShare(c, e);
-  c.revenue = c.gdp * revShare;
+  // royalties and export taxes on commodity surpluses
+  c.revenue = c.gdp * revShare + Math.max(0, c.tradeBalance ?? 0) * 0.2;
   const interest = c.debt * c.interestRate;
   const lawCost = (c.gdp * e.cost * 0.3) / 100; // programme overheads on top of the budget lines
   c.expenses = (c.gdp * budgetTotal(c)) / 100 + lawCost + interest + buildingUpkeep(regs) * pl;
@@ -137,7 +139,7 @@ export function recomputeCountryEconomy(state: GameState, _world: StaticWorld, c
   const k = init ? 1 : 0.08;
   const healthT = clamp(20 + Math.log10(rich + 1) * 14 + c.budget.health * 3 + e.health + health / nRegs * 2, 5, 98);
   const eduT = clamp(15 + Math.log10(rich + 1) * 14 + c.budget.education * 4 + e.education + edu / nRegs * 2, 5, 98);
-  const crimeT = clamp(25 + e.crime - c.budget.police * 4 + c.unemployment * 120 + (100 - c.stability) * 0.1, 2, 95);
+  const crimeT = clamp(25 + e.crime - cabinetSkill(c, 'interior') * 12 - c.budget.police * 4 + c.unemployment * 120 + (100 - c.stability) * 0.1, 2, 95);
   const pollT = clamp(25 + e.pollution + (pollution / nRegs) * 3 + Math.log10(c.gdp + 1) * 3, 2, 98);
   const corrT = clamp((init ? c.corruption : 45 - Math.log10(rich + 1) * 8) + e.corruption - c.budget.admin * 2 + 6, 2, 95);
   c.health += (healthT - c.health) * k;
@@ -165,6 +167,8 @@ export function recomputeCountryEconomy(state: GameState, _world: StaticWorld, c
     'Trade openness': (c.tradeOpenness - 0.4) * 0.012,
     'Trade deals & blocs': Math.min(0.012, treatyBonus) + orgBonus,
     'Sanctions': -sanctionsOn * 0.003,
+    'Finance minister': cabinetSkill(c, 'finance') * 0.012,
+    'Commodity trade': clamp((c.tradeBalance ?? 0) / Math.max(1, c.gdp) * 0.25, -0.02, 0.03),
   };
   // Calibrate so each country starts on its real-world trend; later policy changes move it.
   const policySum = Object.values(parts).reduce((a, b) => a + b, 0);
@@ -228,7 +232,7 @@ export function economyDaily(state: GameState, world: StaticWorld) {
     const prospT = clamp(25 * Math.log10(Math.max(0.3, r.productivity)) + 32 + bProsp + (c.stability - 50) * 0.1 - r.devastation * 0.4 - r.unrest * 0.08, 0, 100);
     r.prosperity += (prospT - r.prosperity) / 60;
     const unrestT = clamp((60 - c.approval) * 0.45 + e.unrest + (r.prosperity < 30 ? 8 : 0) + (occupied ? 45 : 0) - c.budget.police * 2 + bUnrest
-      + r.devastation * 0.2 + (c.laws.emergency_powers === 'martial_law' ? -10 : 0) + modifierSum(c, 'unrest') + (100 - c.stability) * 0.1, 0, 100);
+      + r.devastation * 0.2 - cabinetSkill(c, 'interior') * 8 + (c.laws.emergency_powers === 'martial_law' ? -10 : 0) + modifierSum(c, 'unrest') + (100 - c.stability) * 0.1, 0, 100);
     r.unrest += (unrestT - r.unrest) / 40;
     // baseline defences grow to the level the buildings support; troops can dig in further (military.ts)
     if (r.fort < bDefense + 2) r.fort = Math.min(bDefense + 2, r.fort + 0.02);

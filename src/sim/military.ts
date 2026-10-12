@@ -7,6 +7,7 @@ import { clamp, haversineKm, newId } from './util';
 import { addNews } from './news';
 import { priceLevel, countryPop } from './economy';
 import { makeFormation, ordinal } from './init';
+import { cabinetSkill } from './cabinet';
 
 const TERRAIN_DEFENSE: Record<string, number> = { plains: 1, forest: 1.25, hills: 1.4, jungle: 1.5, mountains: 1.9, desert: 1.1, arctic: 1.4 };
 
@@ -309,7 +310,7 @@ function productionDaily(state: GameState) {
     if (!c.production.length) continue;
     let arms = 0;
     for (const r of state.regions) if (r.owner === c.id) arms += r.buildings.arms_factory ?? 0;
-    const speed = 1 + Math.min(0.8, arms * 0.1);
+    const speed = (1 + Math.min(0.8, arms * 0.1)) * (1 + cabinetSkill(c, 'defense') * 0.4);
     for (const item of [...c.production]) {
       if (state.regions[item.region].controller !== c.id) continue; // stalled
       item.progress += speed;

@@ -15,6 +15,7 @@ import {
 import { makeFormation } from './init';
 import { resolveDecision } from './events';
 import { canNuke, nuclearStrike } from './strategic';
+import { appointMinister, callReferendum } from './cabinet';
 
 export type Command =
   | { type: 'setBudget'; key: BudgetKey; value: number }
@@ -41,6 +42,8 @@ export type Command =
   | { type: 'cancelTreaty'; with: string; treaty: TreatyType }
   | { type: 'declareWar'; target: string }
   | { type: 'nuke'; target: number }
+  | { type: 'appoint'; candidate: string }
+  | { type: 'referendum'; law: string; option: string }
   | { type: 'sanction'; target: string; on: boolean }
   | { type: 'improveRelations'; target: string }
   | { type: 'createOrg'; name: string; short: string; kind: 'military' | 'economic' | 'political'; color: string }
@@ -58,7 +61,7 @@ export interface CommandResult { ok: boolean; error?: string }
 const GOV_COMMANDS = new Set<Command['type']>([
   'setBudget', 'setTax', 'researchFocus', 'build', 'cancelBuild', 'queueUnit', 'cancelProduction', 'createFormation', 'assignUnit', 'assignFormation',
   'detachUnit', 'detachFormation', 'disbandFormation', 'renameFormation', 'disbandUnit', 'order', 'stance', 'propose', 'respond', 'cancelTreaty',
-  'declareWar', 'nuke', 'sanction', 'improveRelations', 'createOrg', 'inviteOrg', 'leaveOrg',
+  'declareWar', 'nuke', 'appoint', 'referendum', 'sanction', 'improveRelations', 'createOrg', 'inviteOrg', 'leaveOrg',
 ]);
 
 export function applyCommand(state: GameState, world: StaticWorld, playerId: string, cmd: Command): CommandResult {
@@ -260,6 +263,14 @@ export function applyCommand(state: GameState, world: StaticWorld, playerId: str
       declareWar(state, world, c.id, cmd.target);
       return ok;
     }
+    case 'appoint': {
+      const e = appointMinister(state, world, c, cmd.candidate);
+      return e ? err(e) : ok;
+    }
+    case 'referendum': {
+      const e = callReferendum(state, c, cmd.law, cmd.option);
+      return e ? err(e) : ok;
+    }
     case 'nuke': {
       const e = canNuke(state, c.id, cmd.target);
       if (e) return err(e);
@@ -281,7 +292,7 @@ export function applyCommand(state: GameState, world: StaticWorld, playerId: str
       const cd = c.modifiers.find((m) => m.id === `envoy_${cmd.target}`);
       if (cd) return err('Diplomatic mission already underway');
       c.treasury -= cost;
-      changeRelation(state, c.id, cmd.target, 8);
+      changeRelation(state, c.id, cmd.target, 8 * (1 + (c.cabinet?.foreign ? (c.cabinet.foreign.competence - 0.5) : 0)));
       c.modifiers.push({ id: `envoy_${cmd.target}`, label: `Envoy to ${state.countries[cmd.target]?.name}`, until: state.tick + 60 });
       return ok;
     }

@@ -1,5 +1,6 @@
 import { useGame, useStore } from '../../store';
-import { Empty, Meter, Section, Slider, Stat } from '../common';
+import { Empty, Meter, Section, Slider, Stat, LineChart } from '../common';
+import { COMMODITIES, topPartners } from '../../sim/trade';
 import { budgetLabel, budgetTotal, lawEffects, ownedRegions, regionGdp } from '../../sim/economy';
 import { fmtMoney, pct } from '../../sim/util';
 import { playerGoverns } from '../../sim/politics';
@@ -48,6 +49,7 @@ export function Economy() {
         <Stat label="Balance" value={fmtMoney(deficit)} sub={pct(deficit / country.gdp)} tone={deficit >= 0 ? 'good' : 'bad'} />
         <Stat label="Debt" value={fmtMoney(country.debt)} sub={`${pct(country.debt / country.gdp, 0)} of GDP`} tone={country.debt / country.gdp > 1 ? 'bad' : 'neutral'} />
         <Stat label="Interest" value={fmtMoney(interest)} sub={pct(country.interestRate)} />
+        <Stat label="Stock index" value={(country.market ?? 100).toFixed(0)} tone={(country.market ?? 100) >= 100 ? 'good' : 'bad'} />
         <Stat label="Energy" value={`${(country.energy * 100).toFixed(0)}%`} sub="supply/demand" tone={country.energy < 1 ? 'bad' : 'good'} />
       </div>
       {!governs && <div className="callout bad">Only the governing party controls the budget.</div>}
@@ -74,6 +76,41 @@ export function Economy() {
         <div className="kv"><span>Debt interest</span><span>{fmtMoney(interest)}</span></div>
         <div className="kv"><span>Military procurement fund</span><span>{fmtMoney(country.milFund)}</span></div>
       </Section>
+
+      <Section title="Commodities & trade" right={<span className={`small ${(country.tradeBalance ?? 0) >= 0 ? 'good' : 'bad'}`}>{fmtMoney(country.tradeBalance ?? 0)}/yr</span>} collapsible>
+        <table className="table commodity-table">
+          <thead><tr><th>Commodity</th><th>Output</th><th>Needs</th><th>Net</th><th>World price</th></tr></thead>
+          <tbody>
+            {COMMODITIES.map((cm) => {
+              const v = country.commodities?.[cm.id];
+              const net = v ? v.prod - v.demand : 0;
+              const price = state.commodityPrices?.[cm.id] ?? cm.base;
+              return (
+                <tr key={cm.id}>
+                  <td>{cm.name}</td>
+                  <td className="mono">{v ? fmtMoney(v.prod) : '—'}</td>
+                  <td className="mono">{v ? fmtMoney(v.demand) : '—'}</td>
+                  <td className={`mono ${net >= 0 ? 'good' : 'bad'}`}>{v ? fmtMoney(net) : '—'}</td>
+                  <td className="mono">{cm.id === 'oil' ? `$${price.toFixed(0)}/bbl` : `${price.toFixed(0)}`}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <div className="muted small" style={{ marginTop: 6 }}>Main trade partners</div>
+        {topPartners(state, world, country.id).map((p) => (
+          <div key={p.id} className="kv clickable" onClick={() => useStore.setState({ selectedCountry: p.id, panel: 'diplomacy' })}><span>{state.countries[p.id]?.name}</span><span className="mono">~{fmtMoney(p.volume)}/yr</span></div>
+        ))}
+        <p className="muted small">Surpluses earn export income (20% flows to the treasury as royalties) and lift growth; deficits are imported. Build Oil & Gas Fields, Mining and Agricultural Complexes to produce more. Sanctioned exporters sell at a discount.</p>
+      </Section>
+
+      {(state.history?.[country.id]?.length ?? 0) > 1 && (
+        <Section title="Trends" collapsible>
+          <LineChart series={[{ name: 'GDP ($B)', color: '#3ccf8e', values: state.history![country.id].map((h) => h.gdp) }]} />
+          <LineChart series={[{ name: 'Stock index', color: '#ffb547', values: state.history![country.id].map((h) => h.market) }]} />
+          <LineChart format={(v) => `${(v * 100).toFixed(0)}%`} series={[{ name: 'Debt / GDP', color: '#ff5d5d', values: state.history![country.id].map((h) => h.debt) }]} />
+        </Section>
+      )}
 
       <Section title="Research" right={<span className="small">{rate.toFixed(0)} pts/yr</span>}>
         {TECH.map((t) => {

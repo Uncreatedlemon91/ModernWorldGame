@@ -3,7 +3,8 @@ import { useGame, useStore } from '../../store';
 import { Empty, Tabs } from '../common';
 import { LAWS, LAW_CATEGORIES, type LawDef, type LawOption } from '../../sim/content/laws';
 import { GROUP_BY_ID } from '../../sim/content/groups';
-import { billVotes, canDecree, playerGoverns } from '../../sim/politics';
+import { billVotes, canDecree, playerGoverns, isDemocracy } from '../../sim/politics';
+import { publicSupport } from '../../sim/cabinet';
 import type { GroupId } from '../../sim/types';
 
 const EFFECT_LABEL: Record<string, [string, number]> = {
@@ -39,6 +40,7 @@ export function Laws() {
   const governs = playerGoverns(state, country, me.id);
   const decree = governs && canDecree(country);
   const party = me.partyId ? state.parties[me.partyId] : null;
+  const referendum = Object.values(state.referendums ?? {}).find((r) => r.country === country.id);
 
   return (
     <div className="panel-content">
@@ -50,7 +52,17 @@ export function Laws() {
         const pending = Object.values(state.bills).find((b) => b.country === country.id && b.law === law.id);
         return (
           <div key={law.id} className="law">
-            <div className="law-head"><b>{law.name}</b>{pending && <span className="tag warn">bill pending</span>}</div>
+            <div className="law-head row">
+              <b className="grow">{law.name}</b>
+              {pending && <span className="tag warn">bill pending</span>}
+              {referendum?.law === law.id && <span className="tag warn">referendum</span>}
+              {governs && isDemocracy(country.gov) && !referendum && (
+                <select className="small-select" value="" title="Put this question to the people. Bypasses the legislature; costs money; failure hurts approval." onChange={(e) => e.target.value && send({ type: 'referendum', law: law.id, option: e.target.value })}>
+                  <option value="">Referendum…</option>
+                  {law.options.filter((o) => o.id !== current).map((o) => <option key={o.id} value={o.id}>{o.name} ({(publicSupport(state, country, law.id, o.id) * 100).toFixed(0)}% support)</option>)}
+                </select>
+              )}
+            </div>
             <div className="law-options">
               {law.options.map((o) => {
                 const active = current === o.id;

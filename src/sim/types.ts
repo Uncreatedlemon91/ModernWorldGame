@@ -84,9 +84,20 @@ export interface Country {
   nukes: number;
 
   production: ProductionItem[];
+  cabinet: Record<MinisterRole, Minister>;
+  candidates: Minister[];
+  market: number; // stock index, 100 at start
+  commodities?: Record<Commodity, { prod: number; demand: number }>;
+  tradeBalance?: number; // billions/yr from commodities
   ai: { aggression: number; caution: number; lastWarCheck: number };
   modifiers: Modifier[];
 }
+
+export type MinisterRole = 'finance' | 'foreign' | 'defense' | 'interior';
+export interface Minister { id: string; role: MinisterRole; name: string; party: string; competence: number; integrity: number; loyalty: number; since: number }
+export interface Referendum { id: string; country: string; law: string; option: string; voteOn: number }
+export interface HistoryPoint { tick: number; approval: number; stability: number; gdp: number; growth: number; debt: number; parties: Record<string, number>; market: number; pop: number }
+export type Commodity = 'oil' | 'minerals' | 'food' | 'goods';
 
 export interface Modifier { id: string; label: string; until: number; growth?: number; stability?: number; approval?: number; unrest?: number }
 
@@ -296,6 +307,10 @@ export interface GameState {
   proposals: Record<string, Proposal>;
   bills: Record<string, Bill>;
   decisions: Record<string, Decision>;
+  referendums: Record<string, Referendum>;
+  history: Record<string, HistoryPoint[]>;
+  commodityPrices: Record<Commodity, number>;
+  commodityScale?: Record<Commodity, number>;
   news: NewsItem[];
   mapEvents: Record<string, MapEvent>;
   relations: Record<string, number>; // "AAA|BBB" sorted key -> opinion delta from base

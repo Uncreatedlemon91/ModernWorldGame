@@ -188,9 +188,9 @@ export function createProposal(state: GameState, from: string, to: string, kind:
 
 /** AI evaluation: positive = accept. */
 export function aiProposalScore(state: GameState, p: Proposal): number {
-  const op = opinion(state, p.to, p.from);
   const me = state.countries[p.to], them = state.countries[p.from];
   if (!me || !them) return -100;
+  const op = opinion(state, p.to, p.from) + (them.cabinet?.foreign ? (them.cabinet.foreign.competence - 0.5) * 20 : 0);
   switch (p.kind.type) {
     case 'treaty': {
       const t = p.kind.treaty;

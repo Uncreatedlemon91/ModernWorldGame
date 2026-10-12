@@ -10,6 +10,8 @@ import { eventsDaily, globalMonthly } from './events';
 import { aiDaily, aiMonthly } from './ai';
 import { campaignDecay } from './commands';
 import { dateOf } from './util';
+import { cabinetMonthly, recordHistory, resolveReferendums } from './cabinet';
+import { commoditiesMonthly, marketMonthly } from './trade';
 
 /** Advance the simulation by one day. Only the host runs this. */
 export function advanceDay(state: GameState, world: StaticWorld) {
@@ -17,6 +19,7 @@ export function advanceDay(state: GameState, world: StaticWorld) {
   state.tick++;
   economyDaily(state, world);
   resolveBills(state);
+  resolveReferendums(state);
   militaryDaily(state, world);
   strategicDaily(state, world);
   diplomacyDaily(state, world);
@@ -32,6 +35,9 @@ export function advanceDay(state: GameState, world: StaticWorld) {
     recomputeCountryEconomy(state, world, c);
     politicsMonthly(state, world, c);
     aiMonthly(state, world, c, rng);
+    cabinetMonthly(state, world, c, rng);
+    marketMonthly(state, c, rng);
+    if (c.playerId || c.gdp > 400) recordHistory(state, c);
   }
   for (const c of countries) {
     if (c.nextElection >= 0 && state.tick >= c.nextElection && isDemocracy(c.gov) && c.laws.emergency_powers !== 'martial_law') holdElection(state, world, c);
@@ -40,6 +46,7 @@ export function advanceDay(state: GameState, world: StaticWorld) {
   if (dateOf(state).getUTCDate() === 1) {
     diplomacyMonthly(state);
     globalMonthly(state, rng);
+    commoditiesMonthly(state, world);
     campaignDecay(state);
   }
   // Countries with no territory left are removed from play

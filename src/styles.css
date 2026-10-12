@@ -363,3 +363,15 @@ button.chip.active { background: rgba(77,163,255,0.2); border-color: var(--accen
   .lobby-left, .lobby-right { width: auto; }
   .menu-screen { padding: 0 16px; background: rgba(3,7,15,0.7); }
 }
+
+.chart { margin: 6px 0 10px; }
+.chart svg { width: 100%; display: block; background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 8px; }
+.chart .grid { stroke: rgba(255,255,255,0.06); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.chart-legend i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+.minister { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.minister .traits { display: flex; gap: 8px; font-size: 11px; color: var(--muted); }
+.commodity-table td, .commodity-table th { text-align: right; }
+.commodity-table td:first-child, .commodity-table th:first-child { text-align: left; }
+.small-select { font-size: 11.5px; padding: 3px 6px; max-width: 190px; }
+.law-head.row { margin: 0 0 6px; }

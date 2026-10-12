@@ -10,8 +10,8 @@ export interface Patch {
   chat: GameState['chat'];
 }
 
-const KEYED = ['countries', 'parties', 'units', 'formations', 'treaties', 'orgs', 'wars', 'proposals', 'bills', 'decisions', 'mapEvents', 'players'] as const;
-const WHOLE = ['tick', 'startDate', 'speed', 'paused', 'settings', 'relations', 'sanctions', 'global', 'nextId', 'seed', 'version', 'phase'] as const;
+const KEYED = ['countries', 'parties', 'units', 'formations', 'treaties', 'orgs', 'wars', 'proposals', 'bills', 'decisions', 'mapEvents', 'players', 'referendums', 'history'] as const;
+const WHOLE = ['tick', 'startDate', 'speed', 'paused', 'settings', 'relations', 'sanctions', 'global', 'nextId', 'seed', 'version', 'phase', 'commodityPrices', 'commodityScale'] as const;
 
 export class StateDiffer {
   private prev = new Map<string, string>();

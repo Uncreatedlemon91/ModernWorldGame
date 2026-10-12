@@ -12,6 +12,8 @@ import { clamp, hexToRgb, newId } from './util';
 import { isDemocracy, defaultElectionInterval, groupTargets, politicsMonthly } from './politics';
 import { recomputeCountryEconomy, regionGdp } from './economy';
 import { applyScenario } from './content/scenarios';
+import { seedCabinet } from './cabinet';
+import { OIL_PRODUCERS, commoditiesMonthly } from './trade';
 
 export const DEFAULT_SETTINGS: GameSettings = {
   scenario: 'realworld',
@@ -148,6 +150,9 @@ export function createInitialState(world: StaticWorld, settings: GameSettings = 
     proposals: {},
     bills: {},
     decisions: {},
+    referendums: {},
+    history: {},
+    commodityPrices: { oil: 75, minerals: 100, food: 100, goods: 100 },
     news: [],
     mapEvents: {},
     relations: {},
@@ -246,7 +251,7 @@ export function createInitialState(world: StaticWorld, settings: GameSettings = 
       corruption: rich ? 20 : poor ? 60 : 40, freedom: 50, health: rich ? 75 : poor ? 35 : 55, education: rich ? 78 : poor ? 35 : 55, crime: 30, pollution: 35,
       warSupport: 40, legislatureSize, seats, nextElection: -1, electionInterval: defaultElectionInterval(gov), lastElection: null, coupRisk: 0,
       manpower: 0, tech: { military: rich ? 3 : poor ? 1 : 2, economy: rich ? 3 : poor ? 1 : 2, society: rich ? 3 : poor ? 1 : 2 },
-      researchFocus: 'economy', militaryReadiness: 1, nukes: major?.nukes ?? 0, production: [],
+      researchFocus: 'economy', militaryReadiness: 1, nukes: major?.nukes ?? 0, production: [], cabinet: {} as Country['cabinet'], candidates: [], market: 100,
       ai: { aggression: clamp((major?.aggression ?? crng.range(0.1, 0.45)) * settings.aiAggression, 0, 1.5), caution: crng.range(0.3, 0.8), lastWarCheck: 0 },
       modifiers: [],
     };
@@ -257,6 +262,14 @@ export function createInitialState(world: StaticWorld, settings: GameSettings = 
     state.countries[sc.a3] = country;
 
     seedBuildings(state, world, country, crng);
+    const oilLv = OIL_PRODUCERS[sc.a3] ?? 0;
+    if (oilLv) {
+      const cands = [...regs].sort((a, b) => {
+        const score = (id: number) => (['desert', 'arctic', 'plains'].includes(world.regions[id].terrain) ? 2 : 1) * Math.sqrt(world.regions[id].area);
+        return score(b) - score(a);
+      });
+      for (let k = 0; k < oilLv; k++) { const r = state.regions[cands[k % Math.min(cands.length, Math.max(1, Math.ceil(oilLv / 2)))]]; r.buildings.oil = Math.min(3, (r.buildings.oil ?? 0) + 1); }
+    }
   }
 
   // ---- Organizations & treaties ----
@@ -273,8 +286,11 @@ export function createInitialState(world: StaticWorld, settings: GameSettings = 
   // ---- Military ----
   for (const sc of world.countries) seedMilitary(state, world, state.countries[sc.a3], rng);
 
+  for (const c of Object.values(state.countries)) seedCabinet(state, world, c);
   applyScenario(state, world, settings.scenario ?? 'peaceful');
 
+  commoditiesMonthly(state, world);
+  for (const c of Object.values(state.countries)) c.growthCal = undefined;
   for (const c of Object.values(state.countries)) recomputeCountryEconomy(state, world, c, true);
   for (const c of Object.values(state.countries)) {
     const targets = groupTargets(state, c);

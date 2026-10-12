@@ -10,6 +10,7 @@ import { applyCommand, assignPlayerCountry, type Command, type CommandResult } f
 import { StateDiffer, applyPatch, gzip, gunzip, isEmptyPatch, type Patch } from './sync';
 import { addNews } from '../sim/news';
 import { recomputeCountryEconomy } from '../sim/economy';
+import { ensureCandidates } from '../sim/cabinet';
 
 export type LobbyCommand =
   | { type: 'lobbyPick'; country: string | null }
@@ -205,6 +206,7 @@ export class HostSession extends Session {
           if (holder) { assignPlayerCountry(s, holder.id, null); delete s.players[holder.id]; }
         }
         assignPlayerCountry(s, playerId, cmd.country);
+        if (cmd.country) ensureCandidates(s, this.world, s.countries[cmd.country]);
         if (cmd.country && s.phase === 'playing') addNews(s, 'world', `${player.name} takes over ${s.countries[cmd.country].name}`, [cmd.country], undefined, true);
         return { ok: true };
       case 'lobbyName':

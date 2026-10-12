@@ -1,5 +1,6 @@
 import { useGame, useStore } from '../../store';
-import { Section, Empty, Swatch, Meter, Slider } from '../common';
+import { Section, Empty, Swatch, Meter, Slider, LineChart } from '../common';
+import { ROLES } from '../../sim/cabinet';
 import { rgbCss } from '../../map/colors';
 import { billVotes, isDemocracy, nationalVote, playerGoverns, ideologyDistance } from '../../sim/politics';
 import { LAW_BY_ID, lawOption } from '../../sim/content/laws';
@@ -63,6 +64,36 @@ export function Politics() {
             <button onClick={() => send({ type: 'campaign', region: campaignRegion, kind: 'ads' })}>National ad blitz · $4M</button>
           </div>
           <Meter label="Momentum" value={50 + party.momentum * 100} right={(party.momentum * 100).toFixed(0)} />
+        </Section>
+      )}
+
+      <Section title="Cabinet" collapsible>
+        {ROLES.map((r) => {
+          const m = country.cabinet?.[r.id];
+          const cands = (country.candidates ?? []).filter((x) => x.role === r.id);
+          return (
+            <div key={r.id} className="minister" title={r.desc}>
+              <div>
+                <div><span className="muted small">{r.name}</span> · <b>{m?.name ?? 'Vacant'}</b> <span className="muted small">{m ? state.parties[m.party]?.short : ''}</span></div>
+                {m && <div className="traits"><span>Competence {(m.competence * 100).toFixed(0)}</span><span>Integrity {(m.integrity * 100).toFixed(0)}</span><span>Loyalty {(m.loyalty * 100).toFixed(0)}</span></div>}
+              </div>
+              {governs && cands.length > 0 && (
+                <select value="" onChange={(e) => e.target.value && send({ type: 'appoint', candidate: e.target.value })}>
+                  <option value="">Replace…</option>
+                  {cands.map((cnd) => <option key={cnd.id} value={cnd.id}>{cnd.name} (C{(cnd.competence * 100).toFixed(0)} I{(cnd.integrity * 100).toFixed(0)})</option>)}
+                </select>
+              )}
+            </div>
+          );
+        })}
+        <p className="muted small">Competent ministers boost growth (Finance), diplomacy (Foreign), production (Defense) and order (Interior). Low-integrity ministers cause scandals.</p>
+      </Section>
+
+      {(state.history?.[country.id]?.length ?? 0) > 1 && (
+        <Section title="Polling history" collapsible>
+          <LineChart min={0} max={Math.max(0.5, ...parties.flatMap((p) => state.history![country.id].map((h) => h.parties[p.id] ?? 0)))} format={(v) => `${(v * 100).toFixed(0)}%`}
+            series={parties.slice(0, 6).map((p) => ({ name: p.short, color: rgbCss(p.color), values: state.history![country.id].map((h) => h.parties[p.id] ?? 0) }))} />
+          <LineChart min={0} max={100} series={[{ name: 'Approval', color: '#4da3ff', values: state.history![country.id].map((h) => h.approval) }, { name: 'Stability', color: '#3ccf8e', values: state.history![country.id].map((h) => h.stability) }]} />
         </Section>
       )}
 

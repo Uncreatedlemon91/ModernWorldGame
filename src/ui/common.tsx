@@ -81,3 +81,32 @@ export function Empty({ children }: { children: ReactNode }) {
 }
 
 export const signed = (v: number, digits = 1, suffix = '') => `${v >= 0 ? '+' : ''}${v.toFixed(digits)}${suffix}`;
+
+export interface Series { name: string; color: string; values: number[] }
+
+/** Minimal responsive SVG line chart for history panels. */
+export function LineChart({ series, height = 120, format = (v: number) => v.toFixed(0), min, max }: { series: Series[]; height?: number; format?: (v: number) => string; min?: number; max?: number }) {
+  const n = Math.max(0, ...series.map((s) => s.values.length));
+  if (n < 2) return <div className="muted small">Not enough history yet — check back after a few months.</div>;
+  const all = series.flatMap((s) => s.values);
+  const lo = min ?? Math.min(...all), hi = max ?? Math.max(...all);
+  const span = hi - lo || 1;
+  const W = 400, H = height, pad = 4;
+  const x = (i: number) => pad + (i / (n - 1)) * (W - pad * 2);
+  const y = (v: number) => H - pad - ((v - lo) / span) * (H - pad * 2);
+  return (
+    <div className="chart">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ height }}>
+        {[0.25, 0.5, 0.75].map((t) => <line key={t} x1={0} x2={W} y1={pad + t * (H - pad * 2)} y2={pad + t * (H - pad * 2)} className="grid" />)}
+        {series.map((s) => (
+          <polyline key={s.name} fill="none" stroke={s.color} strokeWidth={2} vectorEffect="non-scaling-stroke"
+            points={s.values.map((v, i) => `${x(i + (n - s.values.length))},${y(v)}`).join(' ')} />
+        ))}
+      </svg>
+      <div className="chart-legend">
+        <span className="muted small">{format(hi)} max · {format(lo)} min</span>
+        {series.map((s) => <span key={s.name} className="small"><i style={{ background: s.color }} />{s.name} <b>{format(s.values[s.values.length - 1])}</b></span>)}
+      </div>
+    </div>
+  );
+}
